@@ -5,7 +5,9 @@ description: Create a senior-level system design (HLD) guide for any product or 
 
 # System Design Studio
 
-Use when the user asks to design, explain, or learn the high-level design (HLD) of a system: "design Uber", "system design of Netflix", "HLD for a payment gateway", "design a URL shortener", "interview prep for designing X". The deliverable is one self-contained, navigable HTML design-doc published as an artifact, with light and dark modes, optionally with an interactive canvas companion.
+Use when the user asks to design, explain, or learn the high-level design (HLD) of a system: "design Uber", "system design of Netflix", "HLD for a payment gateway", "design a URL shortener", "interview prep for designing X". The deliverable is one self-contained, navigable HTML design-doc published as an artifact, with light and dark modes, optionally with an interactive canvas companion. When the user wants a file to run locally instead, deliver the guide and canvas as one HTML page with tabs (§9).
+
+Reference examples in this repository show the quality bar: `examples/stock-broker/` (default theme, guide and canvas as separate pages) and `examples/uber/` (product theme, hand-drawn architecture SVG, guide and canvas in one file).
 
 ## 1. Decide the subject and the theme
 
@@ -194,6 +196,16 @@ classDef store fill:var(--store-bg),stroke:var(--store),color:var(--ink);
 
 Explain the colour roles in the caption by role (services / bus / external / stores), not by hue, since hues differ between themes.
 
+**Size Mermaid output to its natural width.** By default the SVG shrinks to the column and its text becomes unreadable. After rendering, set the SVG's `width` to its own `max-width` and let the figure scroll inside an `overflow-x:auto` wrapper.
+
+**When Mermaid tangles, hand-draw Figure 1.** A hub-and-spoke graph (Kafka in the middle, 20+ edges crossing subgraphs) defeats Mermaid's layout: subgraph `direction` is ignored once nodes link outside it, and the result comes out about 2,500px wide with crossing edges. Measure the rendered width; if it is over ~1,600px or edges cross through nodes, draw the architecture as inline SVG instead, using the same tokens (see `examples/uber/`):
+
+- Grid layout: clients and edge gateways in a left column; the **CP plane** in a dashed frame on top; **Kafka as a horizontal bus** across the middle; the **AP plane** in a frame below; consumers, stores and external systems in a right column. Producers and consumers attach to the bus with short vertical edges, which removes most crossings.
+- Style through classes, never literals: `.nd rect{fill:var(--svc-bg);stroke:var(--svc)}`, store nodes rounded with `--store`, external nodes as hexagons with `--ext`, the bus with `--bus`. Mark the one or two nodes where the planes meet (e.g. Dispatch, Supply Index) with an accent stroke.
+- Edge types: sync solid `--ink-dim`, Kafka solid `--bus`, store dotted `--store`, external dashed `--ext`; one arrow marker per colour with `style="fill:var(--…)"`.
+- Edge labels in the mono face at 10px with `paint-order:stroke` and a `--surface` stroke so they stay legible over lines. Keep labels short ("CAS", "capture") where space is tight.
+- Use distinctive class names inside the SVG; a short class such as `.st` can collide with a page-level pill class and silently change fonts.
+
 **Data model (Figure 2)**: `classDiagram` with `direction LR`. Each class lists key fields, one per line, with 🔑 for PK and 🔗 for FK. Relationships with cardinality and verb labels:
 
 - composition `*--` for part-of, lifecycle-bound (Order owns Trades)
@@ -214,8 +226,36 @@ Offer (don't force) a second artifact when the user wants to explore interaction
 - Hover a node: highlight its edges and neighbours, fade the rest. Flow chips (the product's real flows, e.g. "Request a ride", "Driver location ping") light up and animate the exact path and print the hop sequence. Click a node: side panel with What it does / How it works / Data owned / Scale & failure / Events emitted & consumed.
 - Pan (drag), zoom (wheel + buttons), fit-to-screen.
 
+Build notes (what made `examples/uber/` work):
+
+- Keep it data-driven: a `nodes` array (id, label, sub-label, x, y, type, icon, and the five panel fields), an `edges` array (id, from, to, type, label, per-edge anchor offsets so parallel edges don't overlap), and `flows` as ordered lists of `[edgeId, reversed?, hop text, topic]`. Geometry and the panel are generated from these.
+- Flow playback: a dot travels each edge with `getPointAtLength`, the matching hop in a numbered list highlights, clicking a hop replays from there, and **Replay** restarts. Under `prefers-reduced-motion`, highlight the path without animating.
+- Open in a working state: the flagship flow is selected and playing. Don't auto-open the side panel on load; it covers a third of the graph.
+- **Fit** reserves space for everything that floats over the canvas: the legend (left), the zoom controls (right), the open side panel, and the hop list on phones.
+- Start a drag only after the pointer moves about 4px, so a click on a node still opens its panel. Support two-finger pinch.
+- Scroll the hop list with its own `scrollTop`, never `scrollIntoView`, which also scrolls the page behind an overlay.
+- A one-screen app grid needs `grid-template-columns:minmax(0,1fr)`, or a horizontally scrolling chip row stretches the whole page wider than the phone.
+
 ## 8. Check, publish, finish
 
-Before publishing, render the page with Playwright in both `colorScheme: 'light'` and `'dark'`, click the toggle once in each, and look at the screenshots: text readable, diagrams drawn (not raw text) and re-coloured, nothing invisible against its background. Mermaid's CDN may be blocked from the sandbox; if so, install `mermaid@11.4.1` from npm and point the test copy's import at the local file.
+Before publishing, render the page with Playwright in both `colorScheme: 'light'` and `'dark'`, click the toggle once in each, and look at the screenshots: text readable, diagrams drawn (not raw text) and re-coloured, nothing invisible against its background. Mermaid's CDN may be blocked from the sandbox; if so, install `mermaid@11.4.1` from npm and point the test copy's import at the local file (for example with Playwright's `page.route('**/mermaid@11.4.1/dist/**', …)`).
+
+Also check, at 1280px and 390px:
+
+- `document.documentElement.scrollWidth` equals `clientWidth` (no sideways scroll on phones).
+- No console errors, and every diagram container holds an `<svg>`.
+- For the canvas: hover a node, click a node with the panel closed, play one flow, and look at the screenshot for nodes hidden under the legend, zoom controls or hop list.
 
 Publish with the Artifact tool, then reply with 2–4 sentences: what the guide covers, the theme it uses and why (product theme or default), the key design decisions worth noticing, and one offer for a next step (sequence diagram, deep-dive on one component, interview cheat-sheet, PDF export).
+
+## 9. Single-file local delivery (on request)
+
+When the user asks for one HTML file, something to "run on localhost", or the guide and canvas together, build one page with tabs instead of two artifacts. `examples/uber/system-design-guide.html` is the reference.
+
+- Write a full document (`<!doctype html>`, `<head>` with charset, viewport, `<title>`, fonts and styles), since there is no artifact skeleton to wrap it.
+- One sticky header holds the brand, two tabs (**Design guide** / **Interactive canvas**, shortened to Guide / Canvas on phones) and the single theme toggle. Both views read the same tokens, so one `themechange` event updates both.
+- Route on the hash: `#canvas` shows the canvas, any other hash shows the guide. When returning to the guide on a section hash (`#data`), scroll that section into view after un-hiding it.
+- **Start the canvas lazily** the first time its tab is shown (inside `requestAnimationFrame`), because `getTotalLength()` and fit need a laid-out SVG. On later visits only re-fit. Size the canvas view to `calc(100dvh - header height)` and hide page scroll while it is shown.
+- **Render Mermaid only while the guide is visible.** Remember which theme it was rendered for; on `themechange` or on switching back to the guide, re-render if the theme differs. Keep diagram sources in `<script type="text/plain">` and draw them with `mermaid.render()` into plain containers, so no other Mermaid handler double-processes them.
+- Namespace canvas classes that clash with the guide (`.legend`, `.pill`, `.foot` became `.cv-legend`, `.cv-pill`, `.cv-foot`), and watch element selectors from the guide (`section{padding-top:…}`) leaking onto canvas elements; reset them on the canvas element.
+- Before handing it over, serve it with `python3 -m http.server` and check both tabs on localhost, the theme carrying across, and `#canvas` opening directly. Tell the user the command to run it.

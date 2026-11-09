@@ -17,6 +17,7 @@ A Claude skill that turns *"design Uber"* or *"HLD for a payment gateway"* into 
 - [What's in a guide](#whats-in-a-guide)
 - [Themes](#themes)
 - [Example: stock broker platform](#example-stock-broker-platform)
+- [Example: Uber (single file)](#example-uber-single-file)
 - [Repository layout](#repository-layout)
 - [Disclaimer](#disclaimer)
 - [License](#license)
@@ -24,11 +25,12 @@ A Claude skill that turns *"design Uber"* or *"HLD for a payment gateway"* into 
 ## What you get
 
 - **A full design document, not a chat answer.** Thirteen sections, from requirements to trade-offs, with a sticky table of contents. It is published as a page you can keep and share.
-- **Real diagrams.** An architecture flowchart and an entity model showing composition, aggregation and association with cardinality. They are drawn with Mermaid and re-coloured when the theme changes.
+- **Real diagrams.** An architecture diagram and an entity model showing composition, aggregation and association with cardinality. Both are re-coloured when the theme changes. The entity model is drawn with Mermaid; busy architecture graphs are drawn as inline SVG so they stay readable.
 - **Checked numbers.** Capacity estimates show their arithmetic. Diagrams, schema, events and APIs are cross-checked to agree with each other.
 - **Company-aware styling.** Ask about Uber, Netflix or WhatsApp and the page takes on that product's look and vocabulary. Generic topics use a clean default template.
 - **Light and dark mode.** The page follows your system setting, and a toggle overrides it.
 - **Optional interactive canvas.** A clickable node graph where you hover a service to trace its connections, light up end-to-end flows, and open a panel explaining each component.
+- **Run it locally.** Ask for a single HTML file and you get the guide and the canvas in one page with tabs, ready to open in a browser or serve with `python3 -m http.server`.
 
 | Architecture diagram | Data model |
 |:---:|:---:|
@@ -101,11 +103,12 @@ Just ask for a system design. The skill activates on its own when the request ma
 
 | You ask | You get |
 |---|---|
-| `System design of Uber` | A guide themed after Uber's product, using its vocabulary (riders, trips, dispatch, surge), built from its public engineering blog and cited |
+| `System design of Uber` | A guide themed after Uber's product, using its vocabulary (riders, trips, dispatch, surge), built from its public engineering blog and cited ([example](examples/uber)) |
 | `Design a URL shortener` | A guide in the default template |
 | `HLD for a payment gateway` | A guide in the default template, built around why the gateway never holds the funds itself |
 | `Design WhatsApp and add the interactive canvas` | The guide plus a clickable architecture canvas |
 | `Design Netflix, keep it plain and minimal` | Your style instead of the product theme |
+| `Design Uber as one HTML file I can run on localhost` | The guide and the canvas in one page with tabs, as a local file |
 
 To call it explicitly:
 
@@ -160,6 +163,25 @@ Every theme defines both modes. All colours come from CSS variables, so the page
 
 GitHub shows HTML files as source, so download the folder (or clone the repo) and open the files in a browser. An internet connection is needed for the fonts and diagrams.
 
+## Example: Uber (single file)
+
+[`examples/uber/`](examples/uber) is a product-themed design of an Uber-scale ride-hailing platform: H3-sharded supply index, dispatch with a per-driver offer lease, trip state machine, surge per hexagon, and payments through a durable workflow into a double-entry ledger. The guide and the interactive canvas ship as **one HTML file** with tabs.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/uber-guide-dark.png">
+  <img alt="The Uber system design guide: title, summary, a pickup-to-drop-off route over a hexagon grid, and four summary cards" src="docs/images/uber-guide-light.png">
+</picture>
+
+| Architecture (hand-drawn SVG) | Canvas: "Request a ride" flow |
+|:---:|:---:|
+| <img alt="Architecture with the CP trip and money plane above a Kafka bus and the AP location and marketplace plane below" src="docs/images/uber-architecture-dark.png"> | <img alt="Interactive canvas with the request-a-ride path lit from rider app through trip service, Kafka, dispatch, supply index and Redis to the driver app" src="docs/images/uber-canvas-ride-flow.png"> |
+
+```bash
+cd examples/uber
+python3 -m http.server 8765
+# open http://localhost:8765/system-design-guide.html  (add #canvas for the canvas tab)
+```
+
 ## Repository layout
 
 ```text
@@ -171,7 +193,8 @@ system-design-studio/
 │   └── system-design-studio/
 │       └── SKILL.md            # the skill itself
 ├── examples/
-│   └── stock-broker/           # a complete generated example
+│   ├── stock-broker/           # guide, canvas and explorer as separate pages
+│   └── uber/                   # product-themed guide + canvas in one file
 └── docs/
     └── images/                 # screenshots used in this README
 ```

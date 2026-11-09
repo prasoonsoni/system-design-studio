@@ -1,0 +1,1851 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>System Design of Uber</title>
+<meta name="description" content="Independent high-level design study of an Uber-scale ride-hailing platform, with an interactive architecture canvas.">
+<script>
+(function(){var t=null;try{t=localStorage.getItem('sdg-theme')}catch(e){}
+if(t==='light'||t==='dark')document.documentElement.dataset.theme=t;})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+html,body{margin:0}
+[hidden]{display:none!important}
+img{max-width:100%}
+
+/* Layout: black header strip, hero with a pickup→drop-off route over an H3 hex grid,
+   then a two-column body: the table of contents drawn as a trip route (stops), content on the right. */
+:root{
+  color-scheme:light;
+  --bg:#ffffff; --surface:#f4f5f4; --surface-2:#eaecea; --line:#d5d9d6; --line-soft:#e6e9e7;
+  --ink:#000000; --ink-mid:#383d3a; --ink-dim:#5b625d;
+  --accent:#04793c; --accent-ink:#ffffff;
+  --svc:#111111; --svc-bg:#ffffff;
+  --bus:#8a5300; --bus-bg:#fff2dc;
+  --ext:#b0243e; --ext-bg:#fdebef;
+  --store:#2f5596; --store-bg:#e8eef8;
+  --ok:#04793c; --warn:#8f5600; --danger:#b8243a; --info:#2a52b5;
+  --ok-bg:#e3f4ea; --warn-bg:#fdf1de; --danger-bg:#fde9ec; --info-bg:#e7edfb;
+  --code-bg:#0e100f; --code-ink:#e4e8e5; --code-key:#7fe0a6; --code-str:#f2c26b; --code-num:#9db8ff; --code-com:#848c86;
+  --header:#000000; --header-ink:#ffffff;
+  --grid:#e9ece9; --canvas:#f8f9f8;
+  --font-display:"Inter Tight", "Helvetica Neue", Arial, sans-serif;
+  --font-body:"Inter Tight", "Helvetica Neue", Arial, sans-serif;
+  --font-mono:"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#000000; --surface:#111312; --surface-2:#1a1d1b; --line:#2c312e; --line-soft:#1f2321;
+    --ink:#ffffff; --ink-mid:#c4cac6; --ink-dim:#8f9792;
+    --accent:#2fd47c; --accent-ink:#000000;
+    --svc:#e9ece9; --svc-bg:#161917;
+    --bus:#f2b04f; --bus-bg:#261d0e;
+    --ext:#ff7d91; --ext-bg:#2a1219;
+    --store:#8fb0ff; --store-bg:#111a2c;
+    --ok:#2fd47c; --warn:#f2b04f; --danger:#ff6f83; --info:#86a8ff;
+    --ok-bg:#0e2318; --warn-bg:#261d0e; --danger-bg:#2a1219; --info-bg:#121a2e;
+    --code-bg:#0b0d0c; --code-ink:#e4e8e5; --code-key:#7fe0a6; --code-str:#f2c26b; --code-num:#9db8ff; --code-com:#7d857f;
+    --header:#0b0c0b; --header-ink:#ffffff;
+    --grid:#151816; --canvas:#070807;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#000000; --surface:#111312; --surface-2:#1a1d1b; --line:#2c312e; --line-soft:#1f2321;
+  --ink:#ffffff; --ink-mid:#c4cac6; --ink-dim:#8f9792;
+  --accent:#2fd47c; --accent-ink:#000000;
+  --svc:#e9ece9; --svc-bg:#161917;
+  --bus:#f2b04f; --bus-bg:#261d0e;
+  --ext:#ff7d91; --ext-bg:#2a1219;
+  --store:#8fb0ff; --store-bg:#111a2c;
+  --ok:#2fd47c; --warn:#f2b04f; --danger:#ff6f83; --info:#86a8ff;
+  --ok-bg:#0e2318; --warn-bg:#261d0e; --danger-bg:#2a1219; --info-bg:#121a2e;
+  --code-bg:#0b0d0c; --code-ink:#e4e8e5; --code-key:#7fe0a6; --code-str:#f2c26b; --code-num:#9db8ff; --code-com:#7d857f;
+  --header:#0b0c0b; --header-ink:#ffffff;
+    --grid:#151816; --canvas:#070807;
+}
+
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:72px}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+body{background:var(--bg);color:var(--ink-mid);font-family:var(--font-body);font-size:16px;line-height:1.62;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:60;background:var(--header)}
+.gutter{padding-left:max(16px, env(safe-area-inset-left,0px));padding-right:max(16px, env(safe-area-inset-right,0px))}
+a{color:var(--accent);text-underline-offset:3px}
+a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+code,.mono{font-family:var(--font-mono);font-size:.88em}
+p code,li code,td code{background:var(--surface-2);padding:1px 5px;color:var(--ink)}
+strong{color:var(--ink)}
+
+/* header */
+.topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:50;background:var(--header);color:var(--header-ink)}
+.topbar-in{max-width:1280px;margin:0 auto;display:flex;align-items:center;gap:16px;padding-block:12px}
+.brand{font-family:var(--font-display);font-weight:800;letter-spacing:-.02em;font-size:17px;display:flex;align-items:center;gap:10px;color:var(--header-ink);text-decoration:none;min-width:0}
+.brand-mark{display:inline-flex;align-items:center;gap:4px;flex:none}
+.brand-mark i{display:block;width:9px;height:9px;border-radius:50%;background:var(--header-ink)}
+.brand-mark b{display:block;width:18px;height:2px;background:var(--header-ink)}
+.brand-mark s{display:block;width:9px;height:9px;background:var(--header-ink)}
+.brand span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topbar .spacer{flex:1}
+.topbar .tag{font-size:12px;letter-spacing:.08em;text-transform:uppercase;opacity:.7;white-space:nowrap}
+.theme-toggle{font:600 13px/1 var(--font-body);background:transparent;color:var(--header-ink);border:1px solid #ffffff55;padding:8px 12px;cursor:pointer;white-space:nowrap}
+.theme-toggle:hover{background:#ffffff1a}
+@media (max-width:640px){.topbar .tag{display:none}}
+
+/* hero */
+.hero{border-bottom:1px solid var(--line)}
+.hero-in{max-width:1280px;margin:0 auto;padding-block:56px 40px;display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:40px;align-items:center}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-dim);margin:0 0 14px}
+.hero h1{font-family:var(--font-display);font-weight:800;font-size:clamp(40px,6.4vw,76px);line-height:.98;letter-spacing:-.035em;color:var(--ink);margin:0 0 20px;text-wrap:balance}
+.hero h1 em{font-style:normal;color:var(--accent)}
+.hero .lede{font-size:18px;max-width:62ch;margin:0}
+.hero-route{width:100%;max-width:520px;justify-self:end}
+.hero-route svg{display:block;width:100%;height:auto}
+.tldr{max-width:1280px;margin:0 auto;padding-block:0 48px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line)}
+.tldr > div{background:var(--bg);padding:18px 18px 20px;min-width:0}
+.tldr .k{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim);font-weight:600}
+.tldr .v{font-family:var(--font-display);font-weight:800;font-size:28px;letter-spacing:-.02em;color:var(--ink);line-height:1.15;margin-top:6px;font-variant-numeric:tabular-nums}
+.tldr .s{font-size:13.5px;margin-top:4px}
+.tldr-wrap{max-width:1280px;margin:0 auto;padding-block:32px 48px}
+@media (max-width:900px){.hero-in{grid-template-columns:1fr;padding-block:40px 24px}.hero-route{justify-self:start;max-width:460px}.tldr{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:420px){.tldr{grid-template-columns:1fr}}
+
+/* body layout */
+.layout{max-width:1280px;margin:0 auto;display:grid;grid-template-columns:250px minmax(0,1fr);gap:56px;padding-block:24px 80px}
+.toc{position:sticky;top:76px;align-self:start;max-height:calc(100vh - 96px);overflow:auto;padding-right:6px}
+.toc h2{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-dim);margin:0 0 14px;font-weight:600}
+.toc ol{list-style:none;margin:0;padding:0;position:relative}
+.toc ol::before{content:"";position:absolute;left:5px;top:10px;bottom:10px;width:2px;background:var(--line)}
+.toc li{position:relative;padding-left:24px}
+.toc li::before{content:"";position:absolute;left:0;top:9px;width:12px;height:12px;border-radius:50%;background:var(--bg);border:2px solid var(--line);box-sizing:border-box;transition:background .2s,border-color .2s}
+.toc li:last-child::before{border-radius:0}
+.toc li.done::before{background:var(--ink-dim);border-color:var(--ink-dim)}
+.toc li.active::before{background:var(--accent);border-color:var(--accent)}
+.toc a{display:block;padding:5px 0;color:var(--ink-mid);text-decoration:none;font-size:14px;line-height:1.35}
+.toc a:hover{color:var(--ink)}
+.toc li.active a{color:var(--ink);font-weight:600}
+.toc .n{font-family:var(--font-mono);font-size:11px;color:var(--ink-dim);margin-right:6px}
+.toc-fab{display:none}
+main{min-width:0}
+@media (max-width:1000px){
+  .layout{grid-template-columns:minmax(0,1fr);gap:0}
+  .toc{position:fixed;z-index:70;top:0;bottom:0;left:0;width:min(320px,86vw);max-height:none;background:var(--bg);border-right:1px solid var(--line);padding:calc(24px + env(safe-area-inset-top,0px)) 20px 24px max(20px, env(safe-area-inset-left,0px));transform:translateX(-105%);transition:transform .25s ease}
+  .toc.open{transform:none;box-shadow:0 0 0 100vmax #00000066}
+  .toc-fab{display:inline-flex;position:fixed;z-index:65;right:calc(16px + env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);border:0;padding:12px 16px;font:600 14px/1 var(--font-body);cursor:pointer;box-shadow:0 6px 20px #00000040}
+}
+
+/* sections */
+section{padding-top:40px;margin-top:8px;border-top:1px solid var(--line)}
+section:first-child{border-top:0;padding-top:16px}
+.sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:8px}
+.sec-num{font-family:var(--font-mono);font-size:13px;color:var(--accent);font-weight:500}
+h2.sec{font-family:var(--font-display);font-weight:800;letter-spacing:-.025em;font-size:clamp(28px,3.4vw,38px);line-height:1.08;color:var(--ink);margin:0;text-wrap:balance}
+h3{font-family:var(--font-display);font-weight:700;letter-spacing:-.01em;font-size:20px;color:var(--ink);margin:32px 0 8px;text-wrap:balance}
+h4{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim);margin:20px 0 6px;font-weight:600}
+main p,main li{max-width:72ch}
+main ul,main ol.plain{padding-left:20px}
+main li{margin:4px 0}
+.sub{color:var(--ink-dim);font-size:15px;margin:4px 0 16px}
+
+/* two-up lists */
+.split{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:16px 0}
+.split > div{border:1px solid var(--line);padding:16px 18px;min-width:0}
+.split h4{margin-top:0}
+.split ul{margin:0}
+@media (max-width:640px){.split{grid-template-columns:1fr}}
+
+/* callouts */
+.callout{border-left:4px solid var(--ink);background:var(--surface);padding:14px 18px;margin:20px 0}
+.callout p{margin:6px 0}
+.callout .ct{font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--ink)}
+.callout.key{border-color:var(--accent);background:var(--ok-bg)}
+.callout.key .ct{color:var(--accent)}
+.callout.warn{border-color:var(--warn);background:var(--warn-bg)}
+.callout.warn .ct{color:var(--warn)}
+.callout.info{border-color:var(--info);background:var(--info-bg)}
+.callout.info .ct{color:var(--info)}
+.callout.note{border-color:var(--ink-dim)}
+.callout.big p{font-family:var(--font-display);font-size:20px;line-height:1.35;color:var(--ink);font-weight:600;letter-spacing:-.01em}
+
+/* tables */
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:6px;margin:16px 0}
+table{border-collapse:collapse;width:100%;font-size:14.5px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;vertical-align:top;padding:10px 14px;border-bottom:1px solid var(--line-soft)}
+th{background:var(--surface);color:var(--ink);font-size:12px;letter-spacing:.06em;text-transform:uppercase;font-weight:700;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td:first-child{color:var(--ink);font-weight:600}
+td.num{text-align:right;white-space:nowrap;font-family:var(--font-mono);font-size:13px;color:var(--ink)}
+td.math{font-family:var(--font-mono);font-size:12.5px;color:var(--ink-mid)}
+table.flow td:first-child{font-family:var(--font-mono);color:var(--accent);width:44px}
+
+/* pills */
+.pill{display:inline-block;font:600 11px/1 var(--font-mono);padding:4px 7px;border:1px solid currentColor;letter-spacing:.03em;white-space:nowrap;vertical-align:1px}
+.m-get{color:var(--ok);background:var(--ok-bg)} .m-post{color:var(--info);background:var(--info-bg)}
+.m-put{color:var(--warn);background:var(--warn-bg)} .m-del{color:var(--danger);background:var(--danger-bg)}
+.cp{color:var(--info);background:var(--info-bg)} .ap{color:var(--warn);background:var(--warn-bg)}
+.st{font-family:var(--font-mono);font-size:12.5px;color:var(--ink);background:var(--surface-2);padding:1px 5px;white-space:nowrap}
+
+/* figures */
+.fig{margin:24px 0;border:1px solid var(--line);background:var(--surface)}
+.fig .mmd{overflow-x:auto;padding:20px 12px;min-height:120px;display:flex}
+.fig .mmd svg{height:auto;margin:0 auto;flex:none}
+.fig .loading{font-size:13px;color:var(--ink-dim);align-self:center}
+.arch-wrap{overflow-x:auto;padding:16px 12px}
+.arch-svg{display:block;width:100%;min-width:900px;height:auto;font-family:var(--font-body)}
+.arch-svg .plane{fill:none;stroke:var(--line);stroke-dasharray:5 4}
+.arch-svg .plane-t{font:600 10.5px var(--font-mono);letter-spacing:.08em;fill:var(--ink-dim)}
+.arch-svg .cp-t{fill:var(--info)} .arch-svg .ap-t{fill:var(--warn)}
+.arch-svg .nd rect,.arch-svg .nd path{fill:var(--svc-bg);stroke:var(--svc);stroke-width:1.3}
+.arch-svg .nd text{font-size:13px;font-weight:600;fill:var(--ink);text-anchor:middle}
+.arch-svg .nd text.sm{font:400 10.5px var(--font-mono);fill:var(--ink-dim)}
+.arch-svg .nd.cl rect{fill:var(--surface-2);stroke:var(--accent)}
+.arch-svg .nd.hl rect{stroke:var(--accent);stroke-width:2.2}
+.arch-svg .nd.sto rect{fill:var(--store-bg);stroke:var(--store)}
+.arch-svg .nd.ext path{fill:var(--ext-bg);stroke:var(--ext)}
+.arch-svg .nd.ext text{fill:var(--ext)}
+.arch-svg .bus rect{fill:var(--bus-bg);stroke:var(--bus);stroke-width:1.5}
+.arch-svg .bus text{font:700 12px var(--font-mono);letter-spacing:.1em;fill:var(--bus)}
+.arch-svg .bus text.sm{font-weight:400;letter-spacing:0;font-size:10.5px}
+.arch-svg .e path{fill:none;stroke:var(--ink-dim);stroke-width:1.3}
+.arch-svg .ev path{stroke:var(--bus)}
+.arch-svg .es path{stroke:var(--store);stroke-dasharray:2 3}
+.arch-svg .ex path{stroke:var(--ext);stroke-dasharray:6 3}
+.arch-svg .el text{font:400 10px var(--font-mono);fill:var(--ink-dim);paint-order:stroke;stroke:var(--surface);stroke-width:4px;stroke-linejoin:round}
+.figcap{border-top:1px solid var(--line);padding:12px 16px;font-size:13.5px;background:var(--bg)}
+.figcap b{color:var(--ink)}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;padding:10px 16px;border-top:1px solid var(--line-soft);font-size:13px;background:var(--bg)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:14px;height:14px;border:2px solid;display:inline-block}
+.sw.svc{border-color:var(--svc);background:var(--svc-bg)} .sw.bus{border-color:var(--bus);background:var(--bus-bg)}
+.sw.ext{border-color:var(--ext);background:var(--ext-bg)} .sw.store{border-color:var(--store);background:var(--store-bg);border-radius:50%/30%}
+
+/* code */
+.code{margin:16px 0;border:1px solid var(--line);background:var(--code-bg);overflow:hidden}
+.code .bar{display:flex;gap:10px;align-items:center;padding:8px 14px;border-bottom:1px solid #ffffff1a;font:500 12px/1.2 var(--font-mono);color:var(--code-com)}
+.code .bar b{color:var(--code-key);font-weight:500}
+.code pre{margin:0;padding:14px 16px;overflow-x:auto;color:var(--code-ink);font:13px/1.6 var(--font-mono)}
+.code .k{color:var(--code-key)} .code .s{color:var(--code-str)} .code .n{color:var(--code-num)} .code .c{color:var(--code-com)}
+
+/* deep-dive cards */
+.dd{border:1px solid var(--line);margin:20px 0}
+.dd > header{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:14px 18px;border-bottom:1px solid var(--line);background:var(--surface)}
+.dd > header h3{margin:0;font-size:19px}
+.dd .body{padding:4px 18px 16px}
+.dd dl{display:grid;grid-template-columns:150px minmax(0,1fr);gap:0 18px;margin:12px 0 0}
+.dd dt{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-dim);font-weight:700;padding:10px 0;border-top:1px solid var(--line-soft)}
+.dd dd{margin:0;padding:10px 0;border-top:1px solid var(--line-soft);min-width:0}
+.dd dd p{margin:0 0 6px}
+.dd dd ul{margin:0}
+@media (max-width:640px){.dd dl{grid-template-columns:1fr}.dd dt{padding-bottom:0}.dd dd{border-top:0;padding-top:4px}}
+
+/* state machine strip */
+.states{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:12px 0;font-family:var(--font-mono);font-size:12px}
+.states span{border:1px solid var(--line);padding:4px 8px;background:var(--bg);color:var(--ink)}
+.states i{font-style:normal;color:var(--ink-dim)}
+.states span.end{border-color:var(--accent);color:var(--accent)}
+.states span.bad{border-color:var(--danger);color:var(--danger)}
+
+/* five things */
+.five{counter-reset:f;list-style:none;padding:0!important;margin:12px 0 0}
+.five li{counter-increment:f;position:relative;padding-left:36px;margin:10px 0}
+.five li::before{content:counter(f);position:absolute;left:0;top:1px;width:24px;height:24px;background:var(--accent);color:var(--accent-ink);font:700 13px/24px var(--font-mono);text-align:center}
+
+footer.foot{border-top:1px solid var(--line);background:var(--surface)}
+.foot-in{max-width:1280px;margin:0 auto;padding-block:32px 48px;font-size:14px}
+.foot-in h2{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);margin:20px 0 8px}
+.foot-in ol{padding-left:20px;margin:0}
+.foot-in li{margin:4px 0;max-width:none}
+.disclaimer{color:var(--ink);font-weight:600;max-width:80ch}
+
+
+/* shared shell: one header, two views */
+.tabs{display:flex;border:1px solid #ffffff40;flex:none}
+.tabs a{color:var(--header-ink);text-decoration:none;font:600 13px/1 var(--font-body);padding:8px 12px;opacity:.72;white-space:nowrap}
+.tabs a:hover{opacity:1}
+.tabs a[aria-current="page"]{background:var(--header-ink);color:var(--header);opacity:1}
+.tabs .short{display:none}
+@media (max-width:820px){.brand span{display:none}}
+@media (max-width:460px){.tabs .long{display:none}.tabs .short{display:inline}}
+html.canvas-mode body{overflow:hidden}
+#canvasView{height:calc(100dvh - var(--hdr,56px));display:flex;flex-direction:column}
+#canvasView .flows{flex:none}
+#canvasView .stage{flex:1}
+
+/* ===== interactive canvas ===== */
+button{font:inherit;color:inherit}
+.flows{border-bottom:1px solid var(--line);background:var(--bg)}
+.flows-in{display:flex;align-items:center;gap:8px;padding-block:10px;overflow-x:auto;scrollbar-width:none}
+.flows-in::-webkit-scrollbar{display:none}
+.flows .lab{font:600 11px/1 var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim);white-space:nowrap;margin-right:4px}
+.chip{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;border:1px solid var(--line);background:var(--surface);padding:7px 12px;cursor:pointer;font-weight:600;font-size:13px;color:var(--ink)}
+.chip .dot{width:8px;height:8px;border-radius:50%;border:2px solid var(--ink-dim)}
+.chip:hover{border-color:var(--ink-dim)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chip[aria-pressed="true"] .dot{border-color:var(--accent);background:var(--accent)}
+
+.stage{position:relative;min-height:0;background:var(--canvas);overflow:hidden}
+#cv{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:grab;display:block}
+#cv.dragging{cursor:grabbing}
+
+/* nodes */
+.node{cursor:pointer;transition:opacity .2s}
+.node .box{fill:var(--svc-bg);stroke:var(--line);stroke-width:1.2}
+.node:hover .box,.node.sel .box{stroke:var(--ink);stroke-width:1.8}
+.node .badge{stroke-width:1.2}
+.node .ic{fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.node .nl{font:700 14px var(--font-body);fill:var(--ink)}
+.node .ns{font:400 10.5px var(--font-mono);fill:var(--ink-dim)}
+.t-client .badge{fill:var(--ok-bg);stroke:var(--accent)} .t-client .ic{stroke:var(--accent)}
+.t-edge .badge{fill:var(--surface-2);stroke:var(--ink-dim)} .t-edge .ic{stroke:var(--ink)}
+.t-cp .badge{fill:var(--info-bg);stroke:var(--info)} .t-cp .ic{stroke:var(--info)}
+.t-ap .badge{fill:var(--warn-bg);stroke:var(--warn)} .t-ap .ic{stroke:var(--warn)}
+.t-cons .badge{fill:var(--surface-2);stroke:var(--ink-dim)} .t-cons .ic{stroke:var(--ink)}
+.t-store .box{fill:var(--store-bg);stroke:var(--store)} .t-store .badge{fill:var(--svc-bg);stroke:var(--store)} .t-store .ic{stroke:var(--store)}
+.t-ext .box{fill:var(--ext-bg);stroke:var(--ext);stroke-dasharray:5 3} .t-ext .badge{fill:var(--svc-bg);stroke:var(--ext)} .t-ext .ic{stroke:var(--ext)} .t-ext .nl{fill:var(--ext)}
+.spine .box{fill:var(--bus-bg);stroke:var(--bus);stroke-width:1.8}
+.spine .ic{stroke:var(--bus)}
+.spine .sl{font:700 14px var(--font-mono);letter-spacing:.35em;fill:var(--bus)}
+.spine .ss{font:400 10.5px var(--font-mono);fill:var(--bus)}
+.node.sel .box{stroke:var(--accent);stroke-width:2.4}
+
+/* edges */
+.edge{transition:opacity .2s}
+.edge .ln{fill:none;stroke-width:1.5}
+.edge .hit{fill:none;stroke:transparent;stroke-width:12}
+.e-sync .ln{stroke:var(--ink-dim)}
+.e-event .ln{stroke:var(--bus)}
+.e-stream .ln{stroke:var(--accent);stroke-dasharray:7 5}
+.e-store .ln{stroke:var(--store);stroke-dasharray:1.5 4;stroke-linecap:round;stroke-width:1.8}
+.e-ext .ln{stroke:var(--ext);stroke-dasharray:9 4}
+.edge .lbl{font:400 10px var(--font-mono);paint-order:stroke;stroke:var(--canvas);stroke-width:4px;stroke-linejoin:round;pointer-events:none}
+.e-sync .lbl{fill:var(--ink-dim)} .e-event .lbl{fill:var(--bus)} .e-stream .lbl{fill:var(--accent)} .e-store .lbl{fill:var(--store)} .e-ext .lbl{fill:var(--ext)}
+.edge .lbl.hov{opacity:0;transition:opacity .2s}
+.edge.hot .lbl.hov,.edge.on .lbl.hov{opacity:1}
+.edge.hot .ln,.edge.on .ln{stroke-width:2.8}
+svg.dim .node,svg.dim .edge{opacity:.16}
+svg.dim .node.hot,svg.dim .edge.hot,svg.dim .node.on,svg.dim .edge.on{opacity:1}
+.pulse{pointer-events:none}
+.pulse circle{fill:var(--accent);stroke:var(--canvas);stroke-width:3}
+
+/* overlays */
+.ctl{position:absolute;right:calc(14px + env(safe-area-inset-right,0px));top:14px;display:flex;flex-direction:column;border:1px solid var(--line);background:var(--bg);z-index:5}
+.ctl button{width:38px;height:38px;border:0;background:transparent;cursor:pointer;font:600 17px/1 var(--font-body);color:var(--ink)}
+.ctl button + button{border-top:1px solid var(--line)}
+.ctl button:hover{background:var(--surface)}
+.ctl .fit{font-size:11px;font-family:var(--font-mono)}
+
+.cv-legend{position:absolute;left:calc(14px + env(safe-area-inset-left,0px));top:14px;background:var(--bg);border:1px solid var(--line);padding:10px 12px;font-size:12px;z-index:5;display:grid;gap:5px}
+.cv-legend b{font:600 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim)}
+.cv-legend span{display:flex;align-items:center;gap:8px;white-space:nowrap}
+.cv-legend svg{flex:none}
+@media (max-width:760px){.cv-legend{display:none}}
+
+.hops{padding:0;margin:0;position:absolute;left:calc(14px + env(safe-area-inset-left,0px));bottom:calc(14px + env(safe-area-inset-bottom,0px));width:min(400px, calc(100% - 28px));max-height:min(42%, 330px);display:flex;flex-direction:column;background:var(--bg);border:1px solid var(--line);z-index:6;box-shadow:0 8px 28px #0000001f}
+.hops header{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line)}
+.hops h2{margin:0;font:800 15px/1.2 var(--font-display);color:var(--ink);letter-spacing:-.01em;flex:1;min-width:0}
+.hops h2 small{display:block;font:400 11px var(--font-mono);color:var(--ink-dim);letter-spacing:0;margin-top:2px}
+.btn{border:1px solid var(--line);background:var(--surface);padding:6px 10px;cursor:pointer;font-weight:600;font-size:12px;color:var(--ink);white-space:nowrap}
+.btn:hover{border-color:var(--ink-dim)}
+.hops ol{list-style:none;margin:0;padding:6px 0;overflow:auto;counter-reset:h}
+.hops li{counter-increment:h;display:grid;grid-template-columns:26px minmax(0,1fr);gap:8px;padding:5px 12px;font-size:12.5px;line-height:1.4;cursor:pointer}
+.hops li::before{content:counter(h);font:500 11px/20px var(--font-mono);text-align:center;color:var(--ink-dim);border:1px solid var(--line);height:20px}
+.hops li:hover{background:var(--surface)}
+.hops li.cur{background:var(--ok-bg)}
+.hops li.cur::before{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.hops li b{color:var(--ink);font-weight:600}
+.hops li .t{display:block;font:400 10.5px var(--font-mono);color:var(--bus)}
+.hops.min ol{display:none}
+
+.panel{position:absolute;top:0;right:0;bottom:0;width:min(380px,100%);background:var(--bg);border-left:1px solid var(--line);z-index:8;display:flex;flex-direction:column;transform:translateX(102%);transition:transform .25s ease;padding-bottom:env(safe-area-inset-bottom,0px)}
+.panel.open{transform:none}
+.panel header{display:flex;gap:12px;align-items:flex-start;padding:18px 18px 14px;border-bottom:1px solid var(--line)}
+.panel .pb{width:44px;height:44px;flex:none;display:grid;place-items:center;border:1.5px solid var(--line)}
+.panel .pb svg{width:26px;height:26px;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.panel h2{margin:0;font:800 20px/1.15 var(--font-display);letter-spacing:-.02em;color:var(--ink)}
+.panel .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.cv-pill{display:inline-block;font:600 10.5px/1 var(--font-mono);padding:4px 6px;border:1px solid currentColor;letter-spacing:.04em;white-space:nowrap}
+.p-cp{color:var(--info);background:var(--info-bg)} .p-ap{color:var(--warn);background:var(--warn-bg)}
+.p-store{color:var(--store);background:var(--store-bg)} .p-ext{color:var(--ext);background:var(--ext-bg)}
+.p-n{color:var(--ink-dim);background:var(--surface)}
+.panel .x{margin-left:auto;border:0;background:transparent;font-size:22px;line-height:1;cursor:pointer;color:var(--ink-dim);padding:2px 4px}
+.panel .x:hover{color:var(--ink)}
+.panel .body{overflow:auto;padding:4px 18px 24px;padding-right:max(18px, env(safe-area-inset-right,0px))}
+.panel h3{font:600 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim);margin:18px 0 6px}
+.panel p{margin:0;color:var(--ink-mid);font-size:13.5px;line-height:1.55}
+.panel code{font:12px var(--font-mono);background:var(--surface-2);padding:1px 4px;color:var(--ink)}
+.panel ul{margin:0;padding:0;list-style:none;display:grid;gap:4px}
+.panel li{font-size:12.5px;display:flex;gap:8px;align-items:baseline}
+.panel li .k{font:500 10.5px var(--font-mono);flex:none;width:62px;text-transform:uppercase;letter-spacing:.04em}
+.panel li .k.in{color:var(--info)} .panel li .k.out{color:var(--accent)}
+.panel .nb{border:0;background:none;padding:0;cursor:pointer;color:var(--ink);font-weight:600;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
+.panel .nb:hover{text-decoration-color:var(--ink)}
+.panel .empty{padding:24px 18px;color:var(--ink-dim)}
+@media (max-width:760px){
+  .panel{top:auto;left:0;width:100%;height:62%;border-left:0;border-top:1px solid var(--line);transform:translateY(102%);box-shadow:0 -10px 30px #00000033}
+  .hops{max-height:34%}
+}
+.cv-foot{position:absolute;right:calc(14px + env(safe-area-inset-right,0px));bottom:calc(10px + env(safe-area-inset-bottom,0px));font-size:10.5px;color:var(--ink-dim);z-index:4;text-align:right;max-width:46%}
+@media (max-width:760px){.cv-foot{display:none}}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-in gutter">
+    <a class="brand" href="#overview"><span class="brand-mark" aria-hidden="true"><i></i><b></b><s></s></span><span>System Design of Uber</span></a>
+    <nav class="tabs" aria-label="Views">
+      <a href="#overview" data-view="guide"><span class="long">Design guide</span><span class="short">Guide</span></a>
+      <a href="#canvas" data-view="canvas"><span class="long">Interactive canvas</span><span class="short">Canvas</span></a>
+    </nav>
+    <span class="spacer"></span>
+    <span class="tag">Independent study · HLD</span>
+    <button class="theme-toggle" id="themeToggle" aria-label="Switch colour theme"></button>
+  </div>
+</header>
+
+<div id="guideView">
+<div class="hero">
+  <div class="hero-in gutter">
+    <div>
+      <p class="eyebrow">Mobility · ride-hailing · high-level design</p>
+      <h1>System Design of <em>Uber</em></h1>
+      <p class="lede">A rider taps <strong>Request</strong>, and within seconds the platform must pick one driver out of thousands nearby, using positions that are already a few seconds old. It must also make sure that driver is never promised two trips at once and that the fare is charged exactly once. This guide designs that system end to end. The location firehose and the marketplace stay fast and approximate. The trip and the money stay strictly correct.</p>
+    </div>
+    <div class="hero-route" aria-hidden="true">
+      <svg viewBox="0 0 520 300" role="img">
+        <defs>
+          <pattern id="hex" width="34" height="58.9" patternUnits="userSpaceOnUse" patternTransform="scale(1)">
+            <path d="M17 0 L34 9.8 L34 29.4 L17 39.2 L0 29.4 L0 9.8 Z M17 39.2 L17 58.9" fill="none" stroke="var(--line)" stroke-width="1"/>
+          </pattern>
+        </defs>
+        <rect width="520" height="300" fill="url(#hex)"/>
+        <path d="M17 156.8 L34 166.6 L34 186.2 L17 196 L0 186.2 L0 166.6 Z" transform="translate(68 -39.2)" fill="var(--ok-bg)" stroke="var(--accent)" stroke-width="1.5"/>
+        <path d="M60 140 C 120 140, 140 60, 220 70 S 330 200, 400 170 S 460 90, 470 80" fill="none" stroke="var(--ink)" stroke-width="5" stroke-linecap="round"/>
+        <circle cx="60" cy="140" r="11" fill="var(--bg)" stroke="var(--ink)" stroke-width="5"/>
+        <rect x="459" y="69" width="22" height="22" fill="var(--ink)"/>
+        <g font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--ink-dim)">
+          <text x="30" y="172">pickup · h3 r9</text>
+          <text x="404" y="60">drop-off</text>
+        </g>
+        <g>
+          <circle cx="150" cy="210" r="5" fill="var(--accent)"/><circle cx="118" cy="98" r="5" fill="var(--ink-dim)"/>
+          <circle cx="240" cy="230" r="5" fill="var(--ink-dim)"/><circle cx="96" cy="190" r="5" fill="var(--accent)"/>
+          <circle cx="300" cy="40" r="5" fill="var(--ink-dim)"/>
+          <line x1="96" y1="190" x2="60" y2="140" stroke="var(--accent)" stroke-width="2" stroke-dasharray="4 4"/>
+        </g>
+      </svg>
+    </div>
+  </div>
+  <div class="tldr-wrap gutter">
+    <div class="tldr" style="padding:0">
+      <div><div class="k">Peak write load</div><div class="v">~375k/s</div><div class="s">driver location pings, held in memory and sharded by H3 cell</div></div>
+      <div><div class="k">Open connections</div><div class="v">~4.6M</div><div class="s">WebSockets for drivers online plus riders in a trip or waiting</div></div>
+      <div><div class="k"><span class="pill cp">CP</span> path</div><div class="v">Trip + money</div><div class="s">trip state machine, driver lease, double-entry ledger</div></div>
+      <div><div class="k"><span class="pill ap">AP</span> path</div><div class="v">Where &amp; how much</div><div class="s">locations, supply index, ETA, surge multipliers</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="layout gutter">
+  <nav class="toc" id="toc" aria-label="Contents">
+    <h2>Route</h2>
+    <ol>
+      <li><a href="#overview"><span class="n">01</span>Overview</a></li>
+      <li><a href="#requirements"><span class="n">02</span>Requirements</a></li>
+      <li><a href="#capacity"><span class="n">03</span>Capacity estimation</a></li>
+      <li><a href="#architecture"><span class="n">04</span>Architecture</a></li>
+      <li><a href="#components"><span class="n">05</span>Component deep-dives</a></li>
+      <li><a href="#lifecycle"><span class="n">06</span>Ride lifecycle</a></li>
+      <li><a href="#data"><span class="n">07</span>Data model &amp; schema</a></li>
+      <li><a href="#api"><span class="n">08</span>API design</a></li>
+      <li><a href="#reliability"><span class="n">09</span>Consistency &amp; reliability</a></li>
+      <li><a href="#scaling"><span class="n">10</span>Scaling &amp; performance</a></li>
+      <li><a href="#security"><span class="n">11</span>Security &amp; compliance</a></li>
+      <li><a href="#observability"><span class="n">12</span>Observability</a></li>
+      <li><a href="#tradeoffs"><span class="n">13</span>Trade-offs</a></li>
+    </ol>
+  </nav>
+  <button class="toc-fab" id="tocFab" aria-controls="toc" aria-expanded="false">☰ Contents</button>
+
+  <main>
+    <!-- 1 -->
+    <section id="overview">
+      <div class="sec-head"><span class="sec-num">01</span><h2 class="sec">Overview</h2></div>
+      <p>Uber's ride-hailing product connects <strong>riders</strong> who want to go somewhere with <strong>drivers</strong> who are online nearby. The platform quotes an upfront fare and finds and <em>dispatches</em> a driver. It streams the driver's position to the rider during pickup and the <strong>trip</strong>, then charges the rider and credits the driver's earnings. Everything runs at city scale, in hundreds of cities at once, with traffic peaks on Friday nights, at concert exits and in rainstorms.</p>
+      <div class="callout key big">
+        <div class="ct">Governing insight</div>
+        <p>Dispatch is real-time geospatial matching over positions that are stale the moment they arrive. Treat location as a disposable AP stream, and treat the trip and its payment as the only strongly consistent truth. A driver can hold at most one live offer, enforced by a lease, never by a fresh read of location.</p>
+      </div>
+      <p>Two consequences follow. First, the hottest data in the system (where every driver is right now) never touches a durable database on the request path. It lives in memory, sharded by geography, and is rebuilt from the stream if a node dies. Second, the correctness-critical writes (trip transitions, driver assignment, ledger postings) are few by comparison, about 14k/s at peak against 375k location pings/s. They can afford compare-and-set and consensus-backed storage.</p>
+      <div class="split">
+        <div>
+          <h4>In scope</h4>
+          <ul>
+            <li>Upfront fare quote and ride request (UberX-style, single rider)</li>
+            <li>Driver online/offline, location ingestion, supply index</li>
+            <li>Dispatch: candidate search, ranking by ETA, offers, accept/decline</li>
+            <li>Trip lifecycle, live tracking, cancellation</li>
+            <li>Surge (dynamic pricing) per hexagon</li>
+            <li>Payment capture, double-entry ledger, receipts, ratings</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Out of scope (external or separate)</h4>
+          <ul>
+            <li>Card networks and processors, wallets (external PSPs)</li>
+            <li>Map tile rendering and basemap data curation</li>
+            <li>Driver onboarding and background checks (treated as a status flag)</li>
+            <li>Uber Eats, freight, shared rides (pooling), scheduled rides</li>
+            <li>Driver payouts to bank accounts (consumes the ledger)</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout note">
+        <div class="ct">How to read this</div>
+        <p>Components credited to Uber (H3, Ringpop, Docstore/Schemaless, Cadence, Jaeger, M3) are from Uber's public engineering material, listed under Sources. How they fit together here, and every number not attributed to a source, is an <strong>assumption</strong> for study purposes. This is not Uber's internal architecture.</p>
+      </div>
+    </section>
+
+    <!-- 2 -->
+    <section id="requirements">
+      <div class="sec-head"><span class="sec-num">02</span><h2 class="sec">Requirements</h2></div>
+      <h3>Functional</h3>
+      <div class="tw"><table>
+        <thead><tr><th>Domain</th><th>Capabilities</th></tr></thead>
+        <tbody>
+          <tr><td>Fare quotes</td><td>Quote by product (<code>UBERX</code>, <code>COMFORT</code>, <code>XL</code>, <code>BLACK</code>) for pickup → drop-off. Returns an upfront fare, surge multiplier, pickup ETA and a <code>quote_id</code> that stays valid for 5 min.</td></tr>
+          <tr><td>Ride request</td><td>Request with a <code>quote_id</code> and payment method. Cancel before or after match (with a cancellation fee after the grace window). Trip states: <span class="st">REQUESTED</span> <span class="st">DISPATCHING</span> <span class="st">DRIVER_ASSIGNED</span> <span class="st">DRIVER_ARRIVED</span> <span class="st">IN_PROGRESS</span> <span class="st">COMPLETED</span> <span class="st">CANCELED</span> <span class="st">NO_DRIVERS</span></td></tr>
+          <tr><td>Driver supply</td><td>Go online/offline. Report location every ~4 s. Driver status: <span class="st">OFFLINE</span> <span class="st">AVAILABLE</span> <span class="st">OFFERED</span> <span class="st">EN_ROUTE</span> <span class="st">ON_TRIP</span></td></tr>
+          <tr><td>Dispatch</td><td>Find candidates near the pickup, rank them by pickup ETA and marketplace score, and send an exclusive offer with a 15 s timeout. Re-offer on decline or timeout. Give up after N rounds with <span class="st">NO_DRIVERS</span>.</td></tr>
+          <tr><td>Live tracking</td><td>Stream the driver's position and ETA to the rider. Stream the trip route and next action to the driver. Share the trip with contacts.</td></tr>
+          <tr><td>Pricing</td><td>Compute a surge multiplier per hexagon from supply and demand, refreshed about every minute. Compute the final fare (upfront, or re-priced on a major route change).</td></tr>
+          <tr><td>Payments</td><td>Pre-authorize at request and capture on completion. Post double-entry ledger entries, issue the receipt and record the driver's earnings. Support refunds and adjustments.</td></tr>
+          <tr><td>Trust &amp; safety</td><td>Two-way ratings, trip anomaly detection (long unexpected stops), an emergency action and fraud signals (GPS spoofing).</td></tr>
+        </tbody>
+      </table></div>
+      <h3>Non-functional</h3>
+      <div class="tw"><table>
+        <thead><tr><th>Attribute</th><th>Target</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Latency</td><td>Quote p99 &lt; 300 ms · request ack p99 &lt; 200 ms · first offer p95 &lt; 3 s · location fan-out p95 &lt; 1 s</td><td>A rider stares at the screen during dispatch, so the matching budget is measured in seconds.</td></tr>
+          <tr><td>Availability</td><td>99.99% for request/trip APIs · 99.95% for tracking</td><td>Tracking can degrade to slower updates. Request and trip must not fail.</td></tr>
+          <tr><td>Consistency</td><td><span class="pill cp">CP</span> trip state, driver lease, ledger · <span class="pill ap">AP</span> locations, supply index, ETA, surge</td><td>Split at the edge. The two planes share no synchronous dependency except dispatch reading the supply index.</td></tr>
+          <tr><td>Durability</td><td>Trips and ledger: zero loss (replicated, consensus commit) · Location history: best effort</td><td>A lost ping is replaced 4 s later. A lost trip or ledger row is a support ticket and a financial error.</td></tr>
+          <tr><td>Scalability</td><td>375k pings/s, 2.6k dispatch cycles/s, 4.6M sockets at peak, plus 2× headroom</td><td>See §03 for the derivation.</td></tr>
+          <tr><td>Idempotency</td><td>Every mutating API takes an <code>Idempotency-Key</code>. Every consumer dedupes on event id.</td><td>Mobile networks retry constantly. A double tap must not create two trips or two charges.</td></tr>
+          <tr><td>Security</td><td>OAuth2 tokens, mTLS between services, PCI scope kept to the payment tokenization boundary</td><td>Precise location is sensitive personal data. See §11.</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <!-- 3 -->
+    <section id="capacity">
+      <div class="sec-head"><span class="sec-num">03</span><h2 class="sec">Capacity estimation</h2></div>
+      <p class="sub">Anchored on Uber's public 2025 figures, then scoped to rides with stated assumptions. Peak-to-average multiplier: <strong>5×</strong>.</p>
+      <div class="tw"><table>
+        <thead><tr><th>Quantity</th><th>Assumption / arithmetic</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td>Platform trips (public)</td><td class="math">13.57B trips in FY2025 ÷ 365 · CEO cited &gt;40M/day in Q4 2025 [5][6]</td><td class="num">~37–40M/day</td></tr>
+          <tr><td>Ride trips to design for</td><td class="math">assume rides ≈ 30M/day (rest is delivery), incl. growth headroom</td><td class="num">30M/day</td></tr>
+          <tr><td>Avg ride requests</td><td class="math">30,000,000 ÷ 86,400</td><td class="num">~350/s</td></tr>
+          <tr><td>Peak ride requests</td><td class="math">350 × 5</td><td class="num">~1,750/s</td></tr>
+          <tr><td>Peak dispatch cycles</td><td class="math">1,750 × 1.5 (re-offers after decline/timeout)</td><td class="num">~2,600/s</td></tr>
+          <tr><td>Fare quotes</td><td class="math">5 quotes per completed trip → 150M/day ÷ 86,400 = 1,740/s; × 5</td><td class="num">~8,700/s peak</td></tr>
+          <tr><td>Drivers online</td><td class="math">assume 1.5M concurrent at peak, 0.75M average</td><td class="num">1.5M peak</td></tr>
+          <tr><td>Location pings</td><td class="math">1 ping / 4 s: 1.5M ÷ 4 peak; 0.75M ÷ 4 = 187.5k/s avg × 86,400</td><td class="num">375k/s · 16.2B/day</td></tr>
+          <tr><td>Ping ingress &amp; storage</td><td class="math">~120 B/ping: 375k × 120 B; 16.2B × 120 B (raw, pre-compression)</td><td class="num">45 MB/s · 1.9 TB/day</td></tr>
+          <tr><td>Concurrent trips</td><td class="math">1,750 starts/s × 1,200 s avg (pickup + ride)</td><td class="num">~2.1M</td></tr>
+          <tr><td>Rider fan-out egress</td><td class="math">2.1M riders × 1 update / 4 s × ~200 B</td><td class="num">525k msg/s · 105 MB/s</td></tr>
+          <tr><td>Open sockets</td><td class="math">1.5M drivers + 2.1M in-trip riders + ~1M waiting/browsing</td><td class="num">~4.6M</td></tr>
+          <tr><td>Realtime gateway nodes</td><td class="math">4.6M ÷ 50k sockets/node = 92; ×1.6 headroom for zone loss</td><td class="num">~150 nodes</td></tr>
+          <tr><td>Trip state writes</td><td class="math">1,750 trips/s × ~8 transitions each (steady state at peak)</td><td class="num">~14k/s peak</td></tr>
+          <tr><td>Trip storage</td><td class="math">30M × ~4 KB (row + ~15 events) = 120 GB/day; × 365; × 3 replicas</td><td class="num">44 TB/yr · 130 TB replicated</td></tr>
+          <tr><td>Ledger entries</td><td class="math">30M trips × ~4 entries ÷ 86,400</td><td class="num">120M/day · ~1.4k/s avg</td></tr>
+        </tbody>
+      </table></div>
+      <div class="callout key">
+        <div class="ct">Takeaway: each plane scales on a different axis</div>
+        <p>The <strong>AP location plane</strong> scales on raw write rate (375k/s) and socket count (4.6M). Keep positions in memory, shard by geography and never put them on a consensus path. The <strong>CP trip plane</strong> handles about 26× fewer writes (14k/s) but each one needs compare-and-set and durable replication. The <strong>money plane</strong> has the lowest rate (about 1.4k ledger rows/s) and the highest value per write, so it gets append-only storage and daily reconciliation.</p>
+      </div>
+    </section>
+
+    <!-- 4 -->
+    <section id="architecture">
+      <div class="sec-head"><span class="sec-num">04</span><h2 class="sec">Architecture</h2></div>
+      <figure class="fig">
+        <div class="arch-wrap"><svg class="arch-svg" viewBox="0 0 1090 600" role="img" aria-label="Architecture: rider and driver apps connect through the API and realtime gateways to the CP trip and money plane and the AP location and marketplace plane, joined by a Kafka bus, with consumers, stores and external systems.">
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--ink-dim)"/></marker>
+    <marker id="ahb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--bus)"/></marker>
+    <marker id="ahx" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--ext)"/></marker>
+    <marker id="ahs" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--store)"/></marker>
+  </defs>
+  <!-- plane frames -->
+  <rect class="plane" x="350" y="90" width="520" height="210"/>
+  <text class="plane-t cp-t" x="350" y="82">CP · TRIP &amp; MONEY PLANE</text>
+  <rect class="plane" x="350" y="396" width="520" height="190"/>
+  <text class="plane-t ap-t" x="350" y="596" dy="0">AP · LOCATION &amp; MARKETPLACE PLANE</text>
+  <rect class="plane" x="905" y="292" width="180" height="186"/>
+  <text class="plane-t" x="905" y="494">CONSUMERS</text>
+  <text class="plane-t" x="20" y="112">CLIENTS</text>
+  <text class="plane-t" x="175" y="112">EDGE</text>
+
+  <!-- edges: sync calls -->
+  <g class="e">
+    <path d="M140 152H175" marker-end="url(#ah)"/>
+    <path d="M140 472H175" marker-start="url(#ah)" marker-end="url(#ah)"/>
+    <path d="M120 174L190 450" marker-start="url(#ah)" marker-end="url(#ah)"/>
+    <path d="M120 450L190 174" marker-end="url(#ah)"/>
+    <path d="M315 154H370" marker-end="url(#ah)"/>
+    <path d="M315 140H335V120H600V130" marker-end="url(#ah)"/>
+    <path d="M315 466H370" marker-end="url(#ah)"/>
+    <path d="M690 154H710" marker-end="url(#ah)"/>
+    <path d="M785 178V230" marker-end="url(#ah)"/>
+    <path d="M370 154H360V544H540" marker-end="url(#ah)"/>
+    <path d="M370 266H360"/>
+    <path d="M500 278L585 420" marker-end="url(#ah)"/>
+  </g>
+  <!-- edges: kafka -->
+  <g class="e ev">
+    <path d="M615 178V330" marker-end="url(#ahb)"/>
+    <path d="M440 278V330" marker-start="url(#ahb)" marker-end="url(#ahb)"/>
+    <path d="M785 278V330" marker-end="url(#ahb)"/>
+    <path d="M445 420V366" marker-end="url(#ahb)"/>
+    <path d="M615 366V420" marker-end="url(#ahb)"/>
+    <path d="M785 366V420" marker-start="url(#ahb)" marker-end="url(#ahb)"/>
+    <path d="M350 348H245V450" marker-end="url(#ahb)"/>
+    <path d="M870 348H890M890 318V460M890 318H920M890 363H920M890 408H920M890 453H920" />
+    <path d="M912 318H920M912 363H920M912 408H920M912 453H920" marker-end="url(#ahb)"/>
+  </g>
+  <!-- edges: stores -->
+  <g class="e es">
+    <path d="M615 130V68" marker-end="url(#ahs)"/>
+    <path d="M860 240H880V170H920" marker-end="url(#ahs)"/>
+    <path d="M370 258H315" marker-end="url(#ahs)"/>
+    <path d="M400 178L300 240" marker-end="url(#ahs)"/>
+  </g>
+  <!-- edges: external -->
+  <g class="e ex">
+    <path d="M860 262H920" marker-start="url(#ahx)" marker-end="url(#ahx)"/>
+    <path d="M995 468V510" marker-end="url(#ahx)"/>
+  </g>
+
+  <!-- edge labels -->
+  <g class="el">
+    <text x="146" y="146">HTTPS</text>
+    <text x="146" y="466">WSS</text>
+    <text x="320" y="460">pings</text>
+    <text x="622" y="318">trip.events</text>
+    <text x="434" y="316" text-anchor="end">offers ↓ trip.events ↑</text>
+    <text x="792" y="318">payment.events</text>
+    <text x="452" y="396">driver.location</text>
+    <text x="622" y="396">driver.location</text>
+    <text x="792" y="396">location ↓ surge ↑</text>
+    <text x="345" y="340" text-anchor="end">offers · trip updates</text>
+    <text x="530" y="300">k-ring query</text>
+    <text x="458" y="118">REST</text>
+    <text x="700" y="124" text-anchor="middle">on COMPLETED</text>
+    <text x="622" y="100">CAS</text>
+    <text x="328" y="252">CAS</text>
+    <text x="364" y="530">route ETA</text>
+    <text x="864" y="256">capture</text>
+  </g>
+
+  <!-- nodes -->
+  <g class="nd cl"><rect x="20" y="130" width="120" height="44"/><text x="80" y="157">Rider app</text></g>
+  <g class="nd cl"><rect x="20" y="450" width="120" height="44"/><text x="80" y="477">Driver app</text></g>
+  <g class="nd"><rect x="175" y="130" width="140" height="44"/><text x="245" y="157">API Gateway</text></g>
+  <g class="nd"><rect x="175" y="450" width="140" height="52"/><text x="245" y="472">Realtime Gateway</text><text class="sm" x="245" y="490">WebSocket · 4.6M</text></g>
+  <g class="nd sto"><rect x="175" y="240" width="140" height="48" rx="14"/><text x="245" y="261">Redis</text><text class="sm" x="245" y="278">lease · quotes · surge</text></g>
+
+  <g class="nd sto"><rect x="540" y="20" width="150" height="48" rx="14"/><text x="615" y="41">Docstore</text><text class="sm" x="615" y="58">trips · Raft per partition</text></g>
+  <g class="nd"><rect x="370" y="130" width="150" height="48"/><text x="445" y="159">Fare Quote</text></g>
+  <g class="nd"><rect x="540" y="130" width="150" height="48"/><text x="615" y="151">Trip Service</text><text class="sm" x="615" y="168">state machine</text></g>
+  <g class="nd"><rect x="710" y="130" width="150" height="48"/><text x="785" y="151">Cadence</text><text class="sm" x="785" y="168">post-trip workflow</text></g>
+  <g class="nd hl"><rect x="370" y="230" width="150" height="48"/><text x="445" y="251">Dispatch</text><text class="sm" x="445" y="268">match · lease · offer</text></g>
+  <g class="nd"><rect x="710" y="230" width="150" height="48"/><text x="785" y="251">Payments</text><text class="sm" x="785" y="268">double-entry ledger</text></g>
+
+  <g class="bus"><rect x="350" y="330" width="520" height="36"/><text x="366" y="353">KAFKA</text><text class="sm" x="430" y="353">at-least-once · keyed by trip_id / driver_id</text></g>
+
+  <g class="nd"><rect x="370" y="420" width="150" height="48"/><text x="445" y="441">Location Ingest</text><text class="sm" x="445" y="458">validate · snap to H3</text></g>
+  <g class="nd hl"><rect x="540" y="420" width="150" height="48"/><text x="615" y="441">Supply Index</text><text class="sm" x="615" y="458">in-memory · H3 shards</text></g>
+  <g class="nd"><rect x="710" y="420" width="150" height="48"/><text x="785" y="441">Surge Engine</text><text class="sm" x="785" y="458">1-min window per hex</text></g>
+  <g class="nd"><rect x="540" y="520" width="150" height="48"/><text x="615" y="541">ETA &amp; Routing</text><text class="sm" x="615" y="558">road graph + ML</text></g>
+
+  <g class="nd"><rect x="920" y="303" width="150" height="30"/><text x="995" y="323">Fraud &amp; Safety</text></g>
+  <g class="nd"><rect x="920" y="348" width="150" height="30"/><text x="995" y="368">Analytics lake</text></g>
+  <g class="nd sto"><rect x="920" y="393" width="150" height="30" rx="10"/><text x="995" y="413">Location history</text></g>
+  <g class="nd"><rect x="920" y="438" width="150" height="30"/><text x="995" y="458">Notifications</text></g>
+
+  <g class="nd sto"><rect x="920" y="150" width="150" height="40" rx="12"/><text x="995" y="175">Ledger DB</text></g>
+  <g class="nd ext"><path d="M932 244H1058L1070 262L1058 280H932L920 262Z"/><text x="995" y="267">Card processors</text></g>
+  <g class="nd ext"><path d="M932 512H1058L1070 530L1058 548H932L920 530Z"/><text x="995" y="535">APNs / FCM / SMS</text></g>
+</svg></div>
+
+        <div class="legend">
+          <span><i class="sw svc"></i>Service</span><span><i class="sw bus"></i>Event bus</span><span><i class="sw ext"></i>External system</span><span><i class="sw store"></i>Data store</span><span>— sync call · <span style="color:var(--bus)">—</span> Kafka topic · ┈ store read/write · <span style="color:var(--ext)">╌</span> external protocol</span>
+        </div>
+        <figcaption class="figcap"><b>Figure 1.</b> High-level architecture. Edges are labelled with protocol or Kafka topic. The CP trip and money plane sits above the Kafka bus and the AP location and marketplace plane below it. The two outlined nodes are where the planes meet: Dispatch, which reads the AP supply index and writes CP leases and trip transitions.</figcaption>
+      </figure>
+      <h3>Edge</h3>
+      <p>The <strong>API Gateway</strong> terminates TLS and authenticates OAuth2 access tokens. It enforces per-user rate limits, checks the <code>Idempotency-Key</code> header and routes request/response calls. The <strong>Realtime Gateway</strong> holds one long-lived WebSocket per app. It carries driver location pings inbound and offers, trip updates and driver positions outbound. It is stateless apart from its connections: a session registry in Redis maps <code>user_id → gateway node</code>, so any service can publish to a user. When a socket drops, the app falls back to push notifications plus polling <code>GET /v1/trips/{id}</code>.</p>
+      <h3>Trip and money plane (CP)</h3>
+      <p>The <strong>Trip Service</strong> owns the trip state machine and is the single writer of a trip row. Every transition is a compare-and-set on <code>(trip_id, version)</code> in Docstore. Uber describes Docstore as giving strict serializability per partition through Raft and favouring consistency over availability [2]. <strong>Dispatch</strong> runs matching and owns the driver lease. <strong>Fare Quote</strong> freezes a price into a short-lived quote. <strong>Payments</strong> posts to an append-only double-entry ledger. Post-trip work runs as a <strong>Cadence</strong> workflow, which retries durably for minutes or days without anyone holding a lock. Cadence is Uber's open-source workflow engine [4].</p>
+      <h3>Location and marketplace plane (AP)</h3>
+      <p><strong>Location Ingest</strong> validates and normalizes pings (snaps to H3, rejects impossible jumps) and publishes them to <code>driver.location</code>, keyed by <code>driver_id</code>. The <strong>Supply Index</strong> is an in-memory, H3-sharded map of available drivers. It is built from that topic and spread over nodes with consistent hashing, as Uber's Ringpop library did for its dispatch tier [3]. <strong>ETA and Routing</strong> answers road-network travel times. <strong>Surge</strong> is a streaming job that computes supply and demand per hexagon. Uber's H3 post says surge is calculated from supply and demand in hexagons [1].</p>
+      <h3>Event backbone</h3>
+      <p>Kafka decouples producers from consumers and is replayable. Its five topics are listed in §07. Everything that does not have to block the rider runs off the bus: notifications, fraud scoring, the analytics lake, location history. Producers use idempotent writes, and consumers dedupe on <code>event_id</code>, so at-least-once delivery behaves like effectively-once processing.</p>
+    </section>
+
+    <!-- 5 -->
+    <section id="components">
+      <div class="sec-head"><span class="sec-num">05</span><h2 class="sec">Component deep-dives</h2></div>
+
+      <article class="dd">
+        <header><h3>Location Ingest &amp; Supply Index</h3><span class="pill ap">AP</span></header>
+        <div class="body"><dl>
+          <dt>Responsibility</dt><dd>Know where every online driver is, to within one ping, and answer "available drivers near this point" in under 10 ms.</dd>
+          <dt>How it works</dt><dd>
+            <p>Each ping (<code>lat, lng, heading, speed, accuracy, ts</code>) is converted to an H3 cell at resolution 9 (~0.1 km² hexagons) and published to Kafka. H3 indexes a point at a resolution from 0 to 15 [1]. Supply Index nodes own <strong>resolution-5 parent cells</strong>, so a city's districts spread across many nodes while a neighbourhood stays on one. Each node keeps <code>cell_r9 → {driver_id → (pos, ts, status, product)}</code>.</p>
+            <p>A query for a pickup takes the pickup's r9 cell and expands a <strong>k-ring</strong> (k = 1, 2, 3…) until it has enough candidates or reaches a radius cap. Hexagons have uniform neighbour distance, which makes ring expansion clean. When a ring crosses a shard boundary, the node scatter-gathers to the neighbouring owner.</p>
+          </dd>
+          <dt>Data owned</dt><dd>In-memory index only (rebuildable). Last-known driver positions are mirrored to Redis with a 30 s TTL for other readers.</dd>
+          <dt>Failure handling</dt><dd>When a node dies, the hash ring reassigns its cells, and the new owner replays the last ~30 s of <code>driver.location</code> from Kafka to warm up. A driver with no ping for 15 s is marked stale and excluded from matching. Pings with impossible speed (&gt;250 km/h) or mock-location flags go to Fraud.</dd>
+        </dl></div>
+      </article>
+
+      <article class="dd">
+        <header><h3>Dispatch (matching + offers)</h3><span class="pill cp">CP lease</span><span class="pill ap">AP reads</span></header>
+        <div class="body"><dl>
+          <dt>Responsibility</dt><dd>Turn a <span class="st">DISPATCHING</span> trip into an accepted driver, fast, without ever offering one driver two trips.</dd>
+          <dt>How it works</dt><dd>
+            <p><strong>1. Candidates:</strong> k-ring query to the Supply Index, filtered by product, vehicle and driver status <span class="st">AVAILABLE</span>, and also by drivers about to finish a nearby trip.</p>
+            <p><strong>2. Rank:</strong> batch ETA call (road-network time, not straight-line distance), plus marketplace terms such as driver idle time and acceptance likelihood.</p>
+            <p><strong>3. Batch match (assumption):</strong> instead of greedy first-come matching, collect requests in a city zone for a short window (~1–2 s) and solve an assignment that minimizes total pickup ETA. Greedy matching gives the nearest driver to the first rider even when a second rider was a better fit.</p>
+            <p><strong>4. Lease and offer:</strong> CAS the driver's state in Redis from <span class="st">AVAILABLE</span> to <span class="st">OFFERED</span> with <code>lease_until = now + 15s</code> and <code>offer_id</code>. Only after the CAS wins is the offer pushed via <code>dispatch.offers</code>. On decline, timeout or lease expiry, release the driver and try the next candidate.</p>
+          </dd>
+          <dt>Data owned</dt><dd><code>driver:state:{driver_id}</code> lease in Redis (replicated, AOF on). <code>DispatchOffer</code> rows persisted asynchronously for audit and acceptance-rate metrics.</dd>
+          <dt>Failure handling</dt><dd>Dispatch workers are stateless per city zone. If one dies mid-offer, the lease expires in 15 s and the trip's dispatch timer (owned by Trip Service) re-emits <code>trip.dispatch_retry</code>. The lease is the safety property: even if two workers process the same trip, only one CAS on a given driver wins, and the trip transition is a second CAS.</dd>
+        </dl></div>
+      </article>
+
+      <article class="dd">
+        <header><h3>Trip Service</h3><span class="pill cp">CP</span></header>
+        <div class="body"><dl>
+          <dt>Responsibility</dt><dd>Source of truth for a trip, from request to final fare. It is the only writer of the trip row.</dd>
+          <dt>How it works</dt><dd>
+            <div class="states"><span>REQUESTED</span><i>→</i><span>DISPATCHING</span><i>→</i><span>DRIVER_ASSIGNED</span><i>→</i><span>DRIVER_ARRIVED</span><i>→</i><span>IN_PROGRESS</span><i>→</i><span class="end">COMPLETED</span><i>·</i><span class="bad">CANCELED</span><span class="bad">NO_DRIVERS</span></div>
+            <p>Each command (<code>accept</code>, <code>arrive</code>, <code>start</code>, <code>complete</code>, <code>cancel</code>) is validated against the current state. It is written as <code>UPDATE … SET state, version = version + 1 WHERE trip_id = ? AND version = ?</code> together with a <code>TripEvent</code> row in the same partition transaction, then published to <code>trip.events</code> through a transactional outbox. An illegal transition (start before arrive) returns <code>409</code>.</p>
+          </dd>
+          <dt>Data owned</dt><dd><code>Trip</code>, <code>TripEvent</code>, outbox, in Docstore partitioned by <code>trip_id</code>. A secondary index on <code>(rider_id, created_at)</code> and <code>(driver_id, created_at)</code> serves trip history.</dd>
+          <dt>Failure handling</dt><dd>The outbox relay guarantees that every committed transition is eventually published, at least once. Docstore's Raft groups survive the loss of a replica. If a partition loses quorum, writes to those trips fail fast with <code>503</code> and the apps retry with the same idempotency key.</dd>
+        </dl></div>
+      </article>
+
+      <article class="dd">
+        <header><h3>Fare Quote &amp; Surge</h3><span class="pill ap">AP</span></header>
+        <div class="body"><dl>
+          <dt>Responsibility</dt><dd>Give the rider a price they can trust before they request, and nudge supply toward demand.</dd>
+          <dt>How it works</dt><dd>
+            <p><strong>Surge</strong> is a stream job over <code>driver.location</code> (supply) and <code>trip.events</code> plus quote requests (demand), with tumbling 1-minute windows per H3 cell (resolution 7 or 8 here, an assumption). Each cell's multiplier is smoothed against its neighbours so prices don't jump across a street, capped, and written to <code>surge:{city}:{h3}</code> with a 2-minute TTL. It is also published on <code>marketplace.surge</code> for the driver heat map.</p>
+            <p><strong>Quote</strong> = route ETA and distance from Routing, base + per-km + per-minute rate card, × the surge multiplier at the pickup cell, plus fees and taxes. The result is frozen into <code>quote:{quote_id}</code> with a 5-minute TTL and an HMAC signature, so the request can't tamper with the price.</p>
+          </dd>
+          <dt>Data owned</dt><dd>Rate cards (config DB), quote cache, surge cache. Every multiplier is also archived to the lake for audit and regulatory questions.</dd>
+          <dt>Failure handling</dt><dd>If surge is stale or missing, use the last value until the TTL expires, then fall back to 1.0×. It never fails a quote. If Routing is down, estimate from straight-line distance × a city detour factor and flag the quote as <code>estimated</code>.</dd>
+        </dl></div>
+      </article>
+
+      <article class="dd">
+        <header><h3>ETA &amp; Routing</h3><span class="pill ap">AP</span></header>
+        <div class="body"><dl>
+          <dt>Responsibility</dt><dd>Point-to-point and one-to-many travel times for quotes, dispatch ranking and live pickup ETA.</dd>
+          <dt>How it works</dt><dd>A road-graph router (contraction hierarchies or similar, which is an assumption) with live traffic speeds per segment gives a base ETA. An ML model then corrects that ETA. Uber has published its DeepETA work on post-processing routing ETAs with deep learning [7]. Dispatch calls a <strong>matrix</strong> endpoint (N drivers × 1 pickup) in a single request.</dd>
+          <dt>Data owned</dt><dd>The road graph (read-only, versioned) and segment speeds, rebuilt from aggregated trip traces.</dd>
+          <dt>Failure handling</dt><dd>Stateless replicas per region. The model runs behind a timeout, with the raw router ETA as the fallback.</dd>
+        </dl></div>
+      </article>
+
+      <article class="dd">
+        <header><h3>Payments &amp; Ledger</h3><span class="pill cp">CP</span></header>
+        <div class="body"><dl>
+          <dt>Responsibility</dt><dd>Move money correctly: pre-authorize, capture, refund, and record every cent as balanced ledger entries.</dd>
+          <dt>How it works</dt><dd>
+            <p>On request, place a pre-authorization hold with the PSP for the quoted fare plus a buffer. On <span class="st">COMPLETED</span>, a Cadence workflow runs these steps: compute final fare → capture (with an idempotency key of <code>trip_id:capture</code> at the PSP) → post a <strong>journal</strong> whose entries sum to zero → emit <code>payment.events</code> → receipt.</p>
+            <p>Example journal for a $20.00 fare: debit <code>rider_receivable</code> 20.00 · credit <code>driver_earnings</code> 15.20 · credit <code>platform_fee</code> 3.60 · credit <code>tax_payable</code> 1.20. Amounts are integer minor units plus an ISO 4217 currency code. Floats are never used.</p>
+          </dd>
+          <dt>Data owned</dt><dd><code>Payment</code>, <code>LedgerEntry</code> (append-only, never updated), <code>PaymentMethod</code> (PSP token only, never a card number).</dd>
+          <dt>Failure handling</dt><dd>A capture failure retries with backoff, then tries the rider's backup method, then records rider arrears and blocks the next request until it is settled. The trip itself is never rolled back. Daily reconciliation matches PSP settlement files to ledger captures.</dd>
+        </dl></div>
+      </article>
+
+      <article class="dd">
+        <header><h3>Realtime Gateway &amp; Notifications</h3><span class="pill ap">AP</span></header>
+        <div class="body"><dl>
+          <dt>Responsibility</dt><dd>Hold 4.6M sockets and deliver offers, trip updates and driver positions in under a second.</dd>
+          <dt>How it works</dt><dd>It consumes <code>dispatch.offers</code> and <code>trip.events</code>, looks up the target's node in the session registry and forwards the message. For live tracking, the gateway serving a rider subscribes to that trip's driver position, which is fanned out from <code>driver.location</code> through a lightweight per-trip pub/sub channel. Every message carries a monotonic <code>seq</code>, and the client ignores anything older than what it has already shown.</dd>
+          <dt>Data owned</dt><dd>Session registry (<code>session:{user_id}</code> → node, TTL refreshed by heartbeat).</dd>
+          <dt>Failure handling</dt><dd>A node drain sends a <code>reconnect</code> frame, and clients reconnect with jitter. Offers are critical, so if the socket is absent the offer also goes out as a high-priority push through APNs/FCM.</dd>
+        </dl></div>
+      </article>
+    </section>
+
+    <!-- 6 -->
+    <section id="lifecycle">
+      <div class="sec-head"><span class="sec-num">06</span><h2 class="sec">Ride lifecycle: request → match → trip</h2></div>
+      <div class="tw"><table class="flow">
+        <thead><tr><th>#</th><th>Step</th><th>Owner</th><th>State / event</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>Rider sets the destination. The app calls <code>POST /v1/fare-quotes</code>. Fare Quote reads surge for the pickup cell and gets the route ETA, then returns the fare and a signed <code>quote_id</code>.</td><td>Fare Quote</td><td><code>quote:{id}</code> TTL 5 min</td></tr>
+          <tr><td>2</td><td>Rider taps Request. The app calls <code>POST /v1/trips</code> with <code>quote_id</code>, <code>payment_method_id</code> and an <code>Idempotency-Key</code>. Payments places the pre-auth hold.</td><td>Trip, Payments</td><td><span class="st">REQUESTED</span> · <code>trip.requested</code></td></tr>
+          <tr><td>3</td><td>Trip Service returns <strong>202 Accepted</strong> and moves to dispatching. The rider sees "Finding your driver".</td><td>Trip</td><td><span class="st">DISPATCHING</span></td></tr>
+          <tr><td>4</td><td>Dispatch consumes the event, queries the Supply Index k-ring, ranks candidates by ETA and batch-matches within the zone window.</td><td>Dispatch, Supply, ETA</td><td>—</td></tr>
+          <tr><td>5</td><td>Dispatch CASes driver D's lease from AVAILABLE to OFFERED (15 s), then publishes the offer. The gateway pushes it to D's app.</td><td>Dispatch, Realtime GW</td><td><code>dispatch.offer_sent</code></td></tr>
+          <tr><td>6</td><td>D taps Accept, and the app calls <code>POST /v1/offers/{id}/accept</code>. Dispatch checks that the lease is still D's, and Trip CASes the trip version.</td><td>Dispatch, Trip</td><td><span class="st">DRIVER_ASSIGNED</span> · driver <span class="st">EN_ROUTE</span></td></tr>
+          <tr><td>7</td><td>The rider gets the driver, car and plate. D's pings fan out to the rider every 4 s, with ETA refreshes.</td><td>Realtime GW, ETA</td><td><code>trip.driver_assigned</code></td></tr>
+          <tr><td>8</td><td>D reaches the pickup and taps Arrived. The wait timer starts, and a cancellation after the grace window carries a fee.</td><td>Trip</td><td><span class="st">DRIVER_ARRIVED</span></td></tr>
+          <tr><td>9</td><td>Rider boards. D taps Start trip, and the app switches to navigation to the drop-off.</td><td>Trip</td><td><span class="st">IN_PROGRESS</span> · driver <span class="st">ON_TRIP</span></td></tr>
+          <tr><td>10</td><td>D taps Complete. Trip Service checks the route against the quote (it re-prices only on a major deviation) and finalizes the fare.</td><td>Trip, Fare</td><td><span class="st">COMPLETED</span> · <code>trip.completed</code></td></tr>
+          <tr><td>11</td><td>A Cadence workflow captures the payment, posts the ledger journal, sends the receipt and opens ratings. D returns to AVAILABLE.</td><td>Cadence, Payments</td><td><code>payment.captured</code> · driver <span class="st">AVAILABLE</span></td></tr>
+        </tbody>
+      </table></div>
+      <div class="callout info">
+        <div class="ct">Sync vs async boundary</div>
+        <p>The rider's request is <strong>synchronous only as far as a durable REQUESTED row</strong>. Steps 1–3 are sync and return 202. Matching (4–6) runs async through Kafka and pushes the result over the socket, because it can take 2–30 s and must survive app restarts. Accept (step 6) is synchronous again so the driver gets an immediate yes or no on the race. Everything after completion (step 11) is async and retried durably. The rider never waits on a card processor.</p>
+      </div>
+    </section>
+
+    <!-- 7 -->
+    <section id="data">
+      <div class="sec-head"><span class="sec-num">07</span><h2 class="sec">Data model &amp; schema</h2></div>
+      <figure class="fig">
+        <div class="mmd er" data-mmd="g-er"><span class="loading">Rendering diagram…</span></div>
+        <div class="legend">
+          <span>◆ composition (part-of, lifecycle-bound)</span><span>◇ aggregation (has-a)</span><span>▸ association (references)</span><span>1 · 0..* cardinality</span><span>🔑 primary key · 🔗 foreign key</span>
+        </div>
+        <figcaption class="figcap"><b>Figure 2.</b> Core entities. The trip owns its events, offers, payment and ratings. A payment owns its balanced ledger entries. Trip rows live in Docstore partitioned by <code>trip_id</code>. Ledger and payment rows live in the ledger DB.</figcaption>
+      </figure>
+<script type="text/plain" id="g-er">
+classDiagram
+  direction LR
+  class Rider {
+    🔑 rider_id uuid
+    phone_e164
+    rating_avg
+    home_city_id
+    status
+  }
+  class Driver {
+    🔑 driver_id uuid
+    city_id
+    rating_avg
+    onboarding_status
+    products_enabled
+  }
+  class Vehicle {
+    🔑 vehicle_id uuid
+    🔗 driver_id
+    plate, make, model, color
+    product_tier
+  }
+  class FareQuote {
+    🔑 quote_id uuid
+    🔗 rider_id
+    product, pickup_h3, dropoff_h3
+    fare_minor, currency
+    surge_multiplier
+    expires_at, signature
+  }
+  class Trip {
+    🔑 trip_id uuid
+    🔗 rider_id
+    🔗 driver_id nullable
+    🔗 quote_id
+    state, version
+    pickup, dropoff
+    final_fare_minor, currency
+    idempotency_key UNIQUE
+    created_at
+  }
+  class TripEvent {
+    🔑 trip_id + seq
+    type, from_state, to_state
+    actor, payload_json, at
+  }
+  class DispatchOffer {
+    🔑 offer_id uuid
+    🔗 trip_id
+    🔗 driver_id
+    eta_s, status
+    sent_at, responded_at
+  }
+  class PaymentMethod {
+    🔑 payment_method_id uuid
+    🔗 rider_id
+    psp_token, brand, last4
+  }
+  class Payment {
+    🔑 payment_id uuid
+    🔗 trip_id UNIQUE
+    🔗 payment_method_id
+    status, auth_minor, captured_minor
+    psp_ref, idempotency_key UNIQUE
+  }
+  class LedgerEntry {
+    🔑 entry_id bigint
+    🔗 journal_id
+    🔗 payment_id
+    account, direction
+    amount_minor, currency, at
+  }
+  class Rating {
+    🔑 trip_id + rater_role
+    stars, tags, comment
+  }
+  Rider "1" o-- "0..*" PaymentMethod : has
+  Rider "1" --> "0..*" Trip : requests
+  Rider "1" --> "0..*" FareQuote : asks for
+  Driver "1" o-- "1..*" Vehicle : registers
+  Trip "0..*" --> "0..1" Driver : assigned to
+  Trip "1" --> "1" FareQuote : priced by
+  Trip "1" *-- "1..*" TripEvent : records
+  Trip "1" *-- "0..*" DispatchOffer : offers
+  DispatchOffer "0..*" --> "1" Driver : sent to
+  Trip "1" *-- "0..1" Payment : settles
+  Payment "0..*" --> "1" PaymentMethod : charges
+  Payment "1" *-- "2..*" LedgerEntry : posts
+  Trip "1" *-- "0..2" Rating : rated by
+</script>
+
+      <h3>Non-relational stores</h3>
+      <div class="code"><div class="bar"><b>redis</b> key patterns</div><pre><span class="c"># driver lease + status (CAS via Lua script on ver)</span>
+<span class="k">driver:state:{driver_id}</span>   HASH  status=AVAILABLE|OFFERED|EN_ROUTE|ON_TRIP  offer_id  trip_id  lease_until  h3_r9  ver
+<span class="c"># signed upfront fare, single-use</span>
+<span class="k">quote:{quote_id}</span>            STRING json  <span class="s">TTL 300s</span>
+<span class="c"># surge multiplier per cell, refreshed every ~60s</span>
+<span class="k">surge:{city_id}:{h3_r8}</span>     STRING <span class="n">1.4</span>  <span class="s">TTL 120s</span>
+<span class="c"># realtime routing</span>
+<span class="k">session:{user_id}</span>           STRING gateway_node  <span class="s">TTL 60s (heartbeat)</span>
+<span class="c"># API idempotency</span>
+<span class="k">idem:{user_id}:{key}</span>        STRING request_hash + response  <span class="s">TTL 24h</span></pre></div>
+
+      <div class="code"><div class="bar"><b>supply index</b> in-memory, per shard (owner of an H3 r5 parent)</div><pre><span class="k">cells</span>: Map&lt;h3_r9, Map&lt;driver_id, {lat, lng, heading, ts, status, product_mask}&gt;&gt;
+<span class="k">byDriver</span>: Map&lt;driver_id, h3_r9&gt;   <span class="c"># move driver between cells on each ping</span>
+<span class="k">query</span>(pickup_h3_r9, product, k_max=4) → candidates sorted by straight-line, then ETA-ranked by Dispatch</pre></div>
+
+      <div class="code"><div class="bar"><b>location history</b> wide-column table (Cassandra-style, assumption)</div><pre><span class="k">PRIMARY KEY</span> ((driver_id, day), ts)   <span class="c"># one partition per driver per day, ~21k rows</span>
+columns: lat, lng, h3_r9, speed, heading, accuracy, trip_id
+<span class="k">TTL</span>: <span class="n">90</span> days raw → downsampled trip traces kept per retention policy</pre></div>
+
+      <h3>Event topics</h3>
+      <div class="tw"><table>
+        <thead><tr><th>Topic</th><th>Partition key</th><th>Events</th><th>Main consumers</th></tr></thead>
+        <tbody>
+          <tr><td><code>driver.location</code></td><td><code>driver_id</code></td><td>ping (lat, lng, h3_r9, ts, status)</td><td>Supply Index, Surge, location history, Realtime GW (trip fan-out), Fraud</td></tr>
+          <tr><td><code>trip.events</code></td><td><code>trip_id</code></td><td>requested, dispatch_retry, driver_assigned, driver_arrived, started, completed, canceled, no_drivers</td><td>Dispatch, Realtime GW, Notifications, Fraud &amp; Safety, lake</td></tr>
+          <tr><td><code>dispatch.offers</code></td><td><code>driver_id</code></td><td>offer_sent, offer_accepted, offer_declined, offer_expired</td><td>Realtime GW, marketplace analytics</td></tr>
+          <tr><td><code>marketplace.surge</code></td><td><code>h3_r8</code></td><td>multiplier_updated</td><td>Driver heat map, pricing audit lake</td></tr>
+          <tr><td><code>payment.events</code></td><td><code>trip_id</code></td><td>authorized, captured, capture_failed, refunded</td><td>Notifications (receipt), earnings, reconciliation</td></tr>
+        </tbody>
+      </table></div>
+      <div class="code"><div class="bar"><b>trip.events</b> sample · trip.driver_assigned</div><pre>{
+  <span class="k">"event_id"</span>: <span class="s">"01J9ZK7Q3M8V2T6XW4HFRB5CN1"</span>,
+  <span class="k">"type"</span>: <span class="s">"trip.driver_assigned"</span>,
+  <span class="k">"trip_id"</span>: <span class="s">"6f1c2a9e-4b7d-4e0a-9c55-0e3d1b8f7a21"</span>,
+  <span class="k">"version"</span>: <span class="n">4</span>,
+  <span class="k">"from_state"</span>: <span class="s">"DISPATCHING"</span>,
+  <span class="k">"to_state"</span>: <span class="s">"DRIVER_ASSIGNED"</span>,
+  <span class="k">"driver_id"</span>: <span class="s">"b42e7d10-91c3-4f6e-8a2b-55d0c9e1f3a7"</span>,
+  <span class="k">"offer_id"</span>: <span class="s">"c8d1e5f2-0a3b-4c6d-9e7f-1a2b3c4d5e6f"</span>,
+  <span class="k">"pickup_eta_s"</span>: <span class="n">240</span>,
+  <span class="k">"city_id"</span>: <span class="n">1</span>,
+  <span class="k">"occurred_at"</span>: <span class="s">"2026-11-09T18:42:07.311Z"</span>
+}</pre></div>
+    </section>
+
+    <!-- 8 -->
+    <section id="api">
+      <div class="sec-head"><span class="sec-num">08</span><h2 class="sec">API design</h2></div>
+      <h3>Conventions</h3>
+      <div class="tw"><table>
+        <thead><tr><th>Concern</th><th>Convention</th></tr></thead>
+        <tbody>
+          <tr><td>Auth</td><td>OAuth2 bearer access token (short-lived) with a role claim (<code>rider</code> / <code>driver</code>). Device attestation on the driver app.</td></tr>
+          <tr><td>Idempotency</td><td><code>Idempotency-Key: &lt;uuid&gt;</code> required on every POST. The same key with a different body returns <code>409</code>. Keys are stored for 24 h.</td></tr>
+          <tr><td>Errors</td><td><code>{"error":{"code":"QUOTE_EXPIRED","message":"…","retryable":false,"trace_id":"…"}}</code></td></tr>
+          <tr><td>Rate limits</td><td>Token bucket per user and per device. <code>429</code> with <code>Retry-After</code>. Location ingest is limited per driver (≤ 1 msg/s).</td></tr>
+          <tr><td>Pagination</td><td>Cursor-based (<code>?cursor=…&amp;limit=20</code>) on trip history.</td></tr>
+          <tr><td>Versioning</td><td>URI major version (<code>/v1</code>), additive changes only within a version, and a minimum app version enforced at the gateway.</td></tr>
+          <tr><td>Concurrency</td><td>Trip responses carry <code>version</code>. Driver commands send <code>If-Match: &lt;version&gt;</code>, so a stale command gets <code>409</code>.</td></tr>
+        </tbody>
+      </table></div>
+      <h3>Endpoints</h3>
+      <div class="tw"><table>
+        <thead><tr><th>Method</th><th>Path</th><th>Caller</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td><span class="pill m-post">POST</span></td><td><code>/v1/fare-quotes</code></td><td>Rider</td><td>Upfront fare per product, with surge and pickup ETA</td></tr>
+          <tr><td><span class="pill m-post">POST</span></td><td><code>/v1/trips</code></td><td>Rider</td><td>Request a ride from a quote (202, async dispatch)</td></tr>
+          <tr><td><span class="pill m-get">GET</span></td><td><code>/v1/trips/{trip_id}</code></td><td>Both</td><td>Current trip state (polling fallback)</td></tr>
+          <tr><td><span class="pill m-post">POST</span></td><td><code>/v1/trips/{trip_id}/cancel</code></td><td>Both</td><td>Cancel, with a fee if past the grace window</td></tr>
+          <tr><td><span class="pill m-put">PUT</span></td><td><code>/v1/drivers/me/status</code></td><td>Driver</td><td>Go online or offline (<code>{"status":"AVAILABLE"}</code>)</td></tr>
+          <tr><td><span class="pill m-post">POST</span></td><td><code>/v1/drivers/me/locations</code></td><td>Driver</td><td>Batched pings when the socket is down</td></tr>
+          <tr><td><span class="pill m-post">POST</span></td><td><code>/v1/offers/{offer_id}/accept</code></td><td>Driver</td><td>Accept an offer (lease-checked)</td></tr>
+          <tr><td><span class="pill m-post">POST</span></td><td><code>/v1/offers/{offer_id}/decline</code></td><td>Driver</td><td>Decline and release the lease</td></tr>
+          <tr><td><span class="pill m-post">POST</span></td><td><code>/v1/trips/{trip_id}/arrive</code> · <code>/start</code> · <code>/complete</code></td><td>Driver</td><td>Trip transitions (<code>If-Match</code> version)</td></tr>
+          <tr><td><span class="pill m-post">POST</span></td><td><code>/v1/trips/{trip_id}/ratings</code></td><td>Both</td><td>1–5 stars and tags</td></tr>
+          <tr><td><span class="pill m-get">GET</span></td><td><code>/v1/riders/me/trips</code></td><td>Rider</td><td>Trip history (cursor)</td></tr>
+          <tr><td><span class="pill m-del">DELETE</span></td><td><code>/v1/payment-methods/{id}</code></td><td>Rider</td><td>Remove a saved payment method</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Worked example: request a ride</h3>
+      <div class="code"><div class="bar"><b>POST</b> /v1/trips</div><pre>Authorization: Bearer eyJ…
+Idempotency-Key: <span class="s">7d0b1f8e-2c43-4a5e-b9d1-3f6a0c2e8b47</span>
+Content-Type: application/json
+
+{
+  <span class="k">"quote_id"</span>: <span class="s">"q_01J9ZK5W2T…"</span>,
+  <span class="k">"product"</span>: <span class="s">"UBERX"</span>,
+  <span class="k">"pickup"</span>:  { <span class="k">"lat"</span>: <span class="n">37.7752</span>, <span class="k">"lng"</span>: <span class="n">-122.4183</span>, <span class="k">"label"</span>: <span class="s">"Market St &amp; 9th"</span> },
+  <span class="k">"dropoff"</span>: { <span class="k">"lat"</span>: <span class="n">37.6213</span>, <span class="k">"lng"</span>: <span class="n">-122.3790</span>, <span class="k">"label"</span>: <span class="s">"SFO Terminal 2"</span> },
+  <span class="k">"payment_method_id"</span>: <span class="s">"pm_4f2a…"</span>
+}</pre></div>
+      <div class="code"><div class="bar"><b>202 Accepted</b> · Location: /v1/trips/6f1c2a9e-…</div><pre>{
+  <span class="k">"trip_id"</span>: <span class="s">"6f1c2a9e-4b7d-4e0a-9c55-0e3d1b8f7a21"</span>,
+  <span class="k">"state"</span>: <span class="s">"DISPATCHING"</span>,
+  <span class="k">"version"</span>: <span class="n">2</span>,
+  <span class="k">"fare"</span>: { <span class="k">"amount_minor"</span>: <span class="n">4280</span>, <span class="k">"currency"</span>: <span class="s">"USD"</span>, <span class="k">"surge_multiplier"</span>: <span class="n">1.2</span> },
+  <span class="k">"stream"</span>: <span class="s">"wss://rt.example/v1/stream?topic=trip:6f1c2a9e…"</span>
+}
+<span class="c">// 202, not 201: the trip exists durably, but the outcome (matched or NO_DRIVERS)
+// arrives later over the socket. A retry with the same Idempotency-Key returns this
+// same body; a new key while a trip is active returns 409 ACTIVE_TRIP_EXISTS.</span></pre></div>
+
+      <h3>Status codes</h3>
+      <div class="tw"><table>
+        <thead><tr><th>Code</th><th>Meaning here</th></tr></thead>
+        <tbody>
+          <tr><td>200 OK</td><td>Read or synchronous command applied (accept, arrive, start, complete)</td></tr>
+          <tr><td>201 Created</td><td>Quote created</td></tr>
+          <tr><td>202 Accepted</td><td>Trip requested, dispatch in progress</td></tr>
+          <tr><td>400 / 422</td><td>Malformed body, or pickup outside the service area</td></tr>
+          <tr><td>401 / 403</td><td>Bad token, or a driver acting on someone else's trip</td></tr>
+          <tr><td>404</td><td>Unknown trip or offer</td></tr>
+          <tr><td>409 Conflict</td><td>Illegal transition, stale <code>If-Match</code>, offer lease lost to timeout, idempotency key reused with a different body, active trip exists</td></tr>
+          <tr><td>410 Gone</td><td>Quote expired: re-quote and show the new price</td></tr>
+          <tr><td>429</td><td>Rate limited (<code>Retry-After</code>)</td></tr>
+          <tr><td>503</td><td>Partition unavailable: retry with the same key</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Streaming protocol (WebSocket)</h3>
+      <div class="code"><div class="bar"><b>wss</b> /v1/stream · JSON frames, seq per channel</div><pre><span class="c">// driver → server, every ~4s</span>
+{ <span class="k">"t"</span>: <span class="s">"loc"</span>, <span class="k">"lat"</span>: <span class="n">37.7741</span>, <span class="k">"lng"</span>: <span class="n">-122.4170</span>, <span class="k">"hd"</span>: <span class="n">212</span>, <span class="k">"spd"</span>: <span class="n">8.4</span>, <span class="k">"acc"</span>: <span class="n">5</span>, <span class="k">"ts"</span>: <span class="n">1794249727311</span> }
+<span class="c">// server → driver: exclusive offer, 15s to respond</span>
+{ <span class="k">"t"</span>: <span class="s">"offer"</span>, <span class="k">"offer_id"</span>: <span class="s">"c8d1…"</span>, <span class="k">"trip_id"</span>: <span class="s">"6f1c…"</span>, <span class="k">"pickup_eta_s"</span>: <span class="n">240</span>, <span class="k">"expires_at"</span>: <span class="n">1794249742311</span>, <span class="k">"seq"</span>: <span class="n">88</span> }
+<span class="c">// server → rider: driver position during pickup and trip</span>
+{ <span class="k">"t"</span>: <span class="s">"driver_pos"</span>, <span class="k">"trip_id"</span>: <span class="s">"6f1c…"</span>, <span class="k">"lat"</span>: <span class="n">37.7741</span>, <span class="k">"lng"</span>: <span class="n">-122.4170</span>, <span class="k">"eta_s"</span>: <span class="n">210</span>, <span class="k">"seq"</span>: <span class="n">31</span> }
+<span class="c">// server → both: state change (mirrors trip.events)</span>
+{ <span class="k">"t"</span>: <span class="s">"trip"</span>, <span class="k">"trip_id"</span>: <span class="s">"6f1c…"</span>, <span class="k">"state"</span>: <span class="s">"DRIVER_ARRIVED"</span>, <span class="k">"version"</span>: <span class="n">5</span> }</pre></div>
+    </section>
+
+    <!-- 9 -->
+    <section id="reliability">
+      <div class="sec-head"><span class="sec-num">09</span><h2 class="sec">Consistency &amp; reliability</h2></div>
+      <h3>Where each guarantee applies</h3>
+      <div class="tw"><table>
+        <thead><tr><th>Data</th><th>Guarantee</th><th>Mechanism</th></tr></thead>
+        <tbody>
+          <tr><td>Trip state</td><td><span class="pill cp">CP</span> linearizable per trip</td><td>Docstore partition (Raft), CAS on <code>version</code>, transactional outbox</td></tr>
+          <tr><td>Driver assignment</td><td><span class="pill cp">CP</span> at most one live offer per driver</td><td>Redis lease CAS with TTL, then a trip CAS on accept. Both must win.</td></tr>
+          <tr><td>Ledger</td><td><span class="pill cp">CP</span> append-only, every journal balances</td><td>Single transaction per journal, a DB constraint that sum = 0, unique <code>idempotency_key</code></td></tr>
+          <tr><td>Driver locations</td><td><span class="pill ap">AP</span> last-writer-wins by <code>ts</code></td><td>Kafka plus in-memory index. Out-of-order pings are dropped.</td></tr>
+          <tr><td>Surge, ETA</td><td><span class="pill ap">AP</span> bounded staleness (≤ 2 min)</td><td>TTL caches with fallback values</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Saga: trip completion → money</h3>
+      <div class="tw"><table class="flow">
+        <thead><tr><th>#</th><th>Step (Cadence activity)</th><th>Compensation if it ultimately fails</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>Finalize fare (upfront or re-priced)</td><td>Use the quoted fare and flag for review</td></tr>
+          <tr><td>2</td><td>Capture with the PSP (<code>trip_id:capture</code> key)</td><td>Retry with backoff, then the backup method, then rider arrears and a block on new requests</td></tr>
+          <tr><td>3</td><td>Post the ledger journal</td><td>Retry forever (idempotent). Alert if pending &gt; 1 h.</td></tr>
+          <tr><td>4</td><td>Credit driver earnings (from the ledger)</td><td>Driver earnings are owed regardless of rider capture. Uber absorbs the receivable.</td></tr>
+          <tr><td>5</td><td>Receipt and rating prompt</td><td>Best effort, no compensation</td></tr>
+          <tr><td>—</td><td>Rider cancels after the PSP hold</td><td>Void the authorization (or capture the cancellation fee)</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Idempotency layers</h3>
+      <ul>
+        <li><strong>Edge:</strong> <code>idem:{user}:{key}</code> stores the request hash and response, so a replay returns the stored response.</li>
+        <li><strong>Domain:</strong> <code>Trip.idempotency_key UNIQUE</code>, plus a one-active-trip-per-rider check. Accept is idempotent per <code>offer_id</code>.</li>
+        <li><strong>Events:</strong> consumers keep a processed <code>event_id</code> set (or apply only if <code>version &gt; last_seen</code>).</li>
+        <li><strong>Money:</strong> PSP idempotency key per capture and <code>Payment.idempotency_key UNIQUE</code>. Reconciliation catches whatever slips through. There is no exactly-once claim, only idempotent effects plus a daily proof.</li>
+      </ul>
+
+      <h3>Failure scenarios</h3>
+      <div class="tw"><table>
+        <thead><tr><th>Scenario</th><th>Effect</th><th>Response</th></tr></thead>
+        <tbody>
+          <tr><td>Two drivers accept the same trip</td><td>Only one holds a lease for that trip</td><td>The second accept fails the lease check and gets <code>409</code>. The trip CAS is the backstop.</td></tr>
+          <tr><td>Driver's app goes offline after an offer</td><td>No reply</td><td>The lease expires in 15 s and Dispatch offers the next candidate. After 3 misses, the driver is auto-set offline.</td></tr>
+          <tr><td>Supply Index shard crashes</td><td>Candidates missing for some cells</td><td>Ringpop-style rebalance plus a 30 s Kafka replay. Dispatch widens the k-ring in the meantime.</td></tr>
+          <tr><td>Kafka consumer lag on <code>driver.location</code></td><td>Stale positions in the index</td><td>Drivers with stale ts are excluded and the lag alarm fires. Rider tracking falls back to the driver socket's direct channel.</td></tr>
+          <tr><td>Card processor outage</td><td>Captures fail</td><td>Trips still complete and the Cadence workflow keeps retrying. Riders aren't blocked until capture is past due.</td></tr>
+          <tr><td>Region/zone loss</td><td>Sockets drop, some partitions lose quorum</td><td>Clients reconnect to the surviving zones, and the gateway headroom (1.6×) absorbs them. Trip partitions re-elect leaders, and in-flight trips continue from durable state.</td></tr>
+          <tr><td>Rider double-taps Request</td><td>Two POSTs</td><td>The same Idempotency-Key returns the same 202. A different key is caught by the active-trip check (<code>409</code>).</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <!-- 10 -->
+    <section id="scaling">
+      <div class="sec-head"><span class="sec-num">10</span><h2 class="sec">Scaling &amp; performance</h2></div>
+      <div class="tw"><table>
+        <thead><tr><th>Component</th><th>Shard / scale key</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td>Supply Index</td><td>H3 r5 parent cell → consistent hash ring</td><td>Proximity queries stay on one shard. A hot downtown cell is split by moving to a finer parent.</td></tr>
+          <tr><td>Dispatch</td><td>City zone (set of r5 cells)</td><td>Batch matching needs every request and driver in a zone on one worker during the window.</td></tr>
+          <tr><td>Trip Service / Docstore</td><td><code>trip_id</code> (random UUID)</td><td>Spreads writes evenly with no hot partitions. Rider and driver lookups go through secondary indexes.</td></tr>
+          <tr><td>Kafka</td><td><code>driver_id</code> / <code>trip_id</code></td><td>Per-entity ordering, which is all the consumers need.</td></tr>
+          <tr><td>Realtime Gateway</td><td>Any node (session registry)</td><td>Stateless apart from sockets, scaled on connection count.</td></tr>
+          <tr><td>Ledger</td><td><code>account_id</code> range, journals within one shard</td><td>A journal's entries commit atomically. Platform-wide accounts are sub-ledgered per city to avoid a hot row.</td></tr>
+        </tbody>
+      </table></div>
+      <h3>Hot spots and spikes</h3>
+      <ul>
+        <li><strong>Event surges</strong> (a stadium lets out, New Year's Eve): demand concentrates in a handful of cells. Pre-split those cells' shards ahead of known events, widen the dispatch batch window slightly so more requests share one solve, and let surge rise to bring drivers in. Queue requests with a visible "high demand" state instead of rejecting them.</li>
+        <li><strong>Airports:</strong> model them as a FIFO driver queue in a geofenced lot, not k-ring proximity. It is fairer to drivers and cheaper to compute.</li>
+        <li><strong>Location write rate:</strong> adaptive ping interval (every 4 s while moving, slower while parked, faster during pickup approach) cuts load by roughly a third.</li>
+        <li><strong>Read-heavy quotes:</strong> cache route ETAs per (origin r9, destination r9, 5-min bucket). Many riders in one building quote similar trips.</li>
+        <li><strong>Autoscaling:</strong> every service except stores is stateless and scales on CPU or connection count, with predictive scale-up from the weekly demand curve per city.</li>
+      </ul>
+    </section>
+
+    <!-- 11 -->
+    <section id="security">
+      <div class="sec-head"><span class="sec-num">11</span><h2 class="sec">Security &amp; compliance</h2></div>
+      <div class="split">
+        <div>
+          <h4>Identity &amp; access</h4>
+          <ul>
+            <li>OAuth2 with short-lived access tokens and refresh rotation. Phone OTP plus device binding.</li>
+            <li>Service-to-service mTLS with per-service identities and authorization policy at the mesh.</li>
+            <li>Object-level checks: a driver can act only on a trip where <code>driver_id = sub</code>.</li>
+            <li>Periodic driver selfie verification against onboarding documents (account-sharing defence).</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Data protection</h4>
+          <ul>
+            <li>Card data never touches our services. The app tokenizes with the PSP, keeping us in a reduced PCI DSS scope.</li>
+            <li>Phone numbers are masked through a calling proxy, so riders and drivers never see each other's numbers.</li>
+            <li>Precise location is PII: encrypted at rest, access logged and justified, raw traces expired on a retention schedule (assumed 90 days raw).</li>
+            <li>Data subject access and erasure requests per GDPR/CCPA. Trip financial records are kept for the tax retention period.</li>
+          </ul>
+        </div>
+      </div>
+      <h3>Abuse &amp; safety</h3>
+      <ul>
+        <li><strong>GPS spoofing:</strong> mock-location flags, impossible speeds, and mismatches between GPS, cell and Wi-Fi positions feed a fraud score. Inflated-distance trips are re-priced from the trusted trace.</li>
+        <li><strong>Promo and referral fraud:</strong> device fingerprinting and payment instrument graphs.</li>
+        <li><strong>Trip anomalies:</strong> long unexpected stops or route deviations trigger an in-app check-in. Uber publicly describes this kind of feature as RideCheck.</li>
+        <li><strong>Rate limiting</strong> at the gateway, plus a separate budget on quote endpoints to stop price scraping.</li>
+      </ul>
+    </section>
+
+    <!-- 12 -->
+    <section id="observability">
+      <div class="sec-head"><span class="sec-num">12</span><h2 class="sec">Observability</h2></div>
+      <p>Uber open-sourced the tools for this layer. <strong>Jaeger</strong> (distributed tracing) and <strong>M3</strong> (metrics platform) both began at Uber [8][9]. The design assumes equivalents: traces propagated across HTTP, Kafka headers and Cadence activities, and high-cardinality metrics tagged by city and product.</p>
+      <div class="tw"><table>
+        <thead><tr><th>Signal</th><th>Metric</th><th>Alert when</th></tr></thead>
+        <tbody>
+          <tr><td>Marketplace health</td><td>Request → accepted p50/p95, match rate, % NO_DRIVERS, per city</td><td>Match rate drops &gt; 5 pts vs same hour last week</td></tr>
+          <tr><td>Dispatch</td><td>Offers per trip, offer acceptance rate, lease expiries/s</td><td>Expiries spike (often an app or gateway regression)</td></tr>
+          <tr><td>Location plane</td><td>Pings/s, ingest → index lag p99, % drivers stale</td><td>Lag &gt; 5 s or stale &gt; 2%</td></tr>
+          <tr><td>ETA quality</td><td>Predicted vs actual pickup ETA (MAE), bias</td><td>MAE regression after a model or graph deploy</td></tr>
+          <tr><td>Realtime</td><td>Connected sockets, reconnect rate, push delivery latency</td><td>Reconnect storm (&gt; 3× baseline)</td></tr>
+          <tr><td>Trip API</td><td>RED metrics per endpoint, 409 rate on transitions</td><td>p99 &gt; SLO for 5 min, burn-rate alerts</td></tr>
+          <tr><td>Money</td><td>Capture success rate, pending captures age, ledger imbalance, PSP vs ledger reconciliation diff</td><td>Any non-zero journal imbalance (page). Reconciliation diff &gt; threshold.</td></tr>
+        </tbody>
+      </table></div>
+      <div class="callout note">
+        <div class="ct">Reconciliation dashboard</div>
+        <p>Run three daily proofs: every <span class="st">COMPLETED</span> trip has exactly one capture or arrears record, every capture has a balanced journal, and the PSP settlement total equals the ledger's captured total per currency. Show discrepancies as a work queue, not just a chart.</p>
+      </div>
+    </section>
+
+    <!-- 13 -->
+    <section id="tradeoffs">
+      <div class="sec-head"><span class="sec-num">13</span><h2 class="sec">Trade-offs</h2></div>
+      <div class="tw"><table>
+        <thead><tr><th>Decision</th><th>Choice &amp; why</th></tr></thead>
+        <tbody>
+          <tr><td>Geo index</td><td><strong>H3 hexagons</strong> over geohash or quadtree. Uniform neighbour distance gives clean k-ring expansion and fair surge cells, and Uber built it for exactly this [1]. Cost: harder to reason about than lat/lng boxes.</td></tr>
+          <tr><td>Where locations live</td><td><strong>In memory, rebuilt from Kafka</strong>, not a database. 375k writes/s of data that expires in seconds doesn't deserve durability. Cost: a warm-up gap after a shard failure.</td></tr>
+          <tr><td>Matching strategy</td><td><strong>Short-window batch matching</strong> over greedy nearest-driver. It lowers total pickup time across a zone. Cost: 1–2 s of added latency and a zone-local solver.</td></tr>
+          <tr><td>Preventing double booking</td><td><strong>Driver lease (CAS + TTL)</strong> plus a trip version CAS, not a distributed lock service. The TTL self-heals crashed workers.</td></tr>
+          <tr><td>Trip store</td><td><strong>Docstore-like, CP per partition</strong> [2]. Correctness beats availability for the trip. A quorum loss fails a few trips' writes briefly instead of corrupting state.</td></tr>
+          <tr><td>Request API</td><td><strong>202 + push</strong> over a long-held HTTP request. Matching can take 30 s and has to survive app backgrounding.</td></tr>
+          <tr><td>Post-trip money flow</td><td><strong>Durable workflow (Cadence)</strong> over ad-hoc retries and cron jobs. Each step is visible, retryable and resumable [4].</td></tr>
+          <tr><td>Pricing</td><td><strong>Upfront, signed quote</strong> over a metered fare. The rider sees a firm price, and the platform takes the variance risk.</td></tr>
+        </tbody>
+      </table></div>
+      <div class="callout key">
+        <div class="ct">If you remember five things</div>
+        <ol class="five">
+          <li>Split the planes: locations, ETA and surge are AP; trip, lease and ledger are CP.</li>
+          <li>Index drivers in H3 cells in memory and search outward with k-rings; never query a database for "nearby".</li>
+          <li>A driver is offered one trip at a time, enforced by a TTL lease CAS, with a trip-version CAS as the backstop.</li>
+          <li>Request returns 202 once the trip is durable, matching runs async, and results come back over WebSocket.</li>
+          <li>Money runs as a durable workflow into a double-entry ledger, with idempotency keys and daily reconciliation, never "exactly once".</li>
+        </ol>
+      </div>
+    </section>
+  </main>
+</div>
+
+<footer class="foot">
+  <div class="foot-in gutter">
+    <p class="disclaimer">Independent educational study. Not affiliated with or endorsed by Uber Technologies, Inc. Architecture reconstructed from public sources and stated assumptions.</p>
+    <h2>Sources</h2>
+    <ol>
+      <li><a href="https://www.uber.com/blog/h3/" target="_blank" rel="noopener">H3: Uber's Hexagonal Hierarchical Spatial Index</a>, Uber Engineering blog (2018)</li>
+      <li><a href="https://www.uber.com/blog/schemaless-sql-database/" target="_blank" rel="noopener">Evolving Schemaless into a Distributed SQL Database (Docstore)</a>, Uber Engineering blog (2021)</li>
+      <li><a href="https://www.uber.com/blog/tech-stack-part-one-foundation/" target="_blank" rel="noopener">The Uber Engineering Tech Stack, Part I: The Foundation (Ringpop)</a>, Uber Engineering blog (2016)</li>
+      <li><a href="https://cadenceworkflow.io/" target="_blank" rel="noopener">Cadence workflow engine</a>, open-sourced by Uber</li>
+      <li><a href="https://s23.q4cdn.com/407969754/files/doc_events/2026/May/04/2025-Annual-Report.pdf" target="_blank" rel="noopener">Uber 2025 Annual Report</a> (13.57B trips in FY2025)</li>
+      <li><a href="https://finance.yahoo.com/news/uber-technologies-q4-earnings-call-112910693.html" target="_blank" rel="noopener">Uber Q4 2025 earnings call coverage</a> (&gt;40M trips/day, 202M MAPCs)</li>
+      <li><a href="https://www.uber.com/blog/deepeta-how-uber-predicts-arrival-times/" target="_blank" rel="noopener">DeepETA: How Uber Predicts Arrival Times Using Deep Learning</a>, Uber Engineering blog</li>
+      <li><a href="https://www.jaegertracing.io/" target="_blank" rel="noopener">Jaeger distributed tracing</a>, created at Uber (CNCF)</li>
+      <li><a href="https://m3db.io/" target="_blank" rel="noopener">M3 metrics platform</a>, created at Uber</li>
+    </ol>
+    <p style="margin-top:16px">All capacity figures beyond the cited public numbers, the batch-matching window, shard resolutions, TTLs and retention periods are assumptions for study.</p>
+  </div>
+</footer>
+</div>
+
+<div id="canvasView" hidden>
+<nav class="flows" aria-label="Flows">
+    <div class="flows-in gutter" id="chips"><span class="lab">Trace a flow</span></div>
+  </nav>
+  <div class="stage" id="stage">
+    <svg id="cv" aria-label="Interactive architecture canvas">
+      <defs>
+        <pattern id="gridp" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" style="stroke:var(--grid)" stroke-width="1"/></pattern>
+        <marker id="m-sync" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--ink-dim)"/></marker>
+        <marker id="m-event" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--bus)"/></marker>
+        <marker id="m-stream" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--accent)"/></marker>
+        <marker id="m-store" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--store)"/></marker>
+        <marker id="m-ext" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--ext)"/></marker>
+      </defs>
+      <rect x="-5000" y="-5000" width="10000" height="10000" fill="url(#gridp)" id="bgrect"/>
+      <g id="world"><g id="edges"></g><g id="nodes"></g><g id="pulses" class="pulse"></g></g>
+    </svg>
+
+    <div class="cv-legend" aria-label="Legend">
+      <b>Edges</b>
+      <span><svg width="34" height="8"><path d="M1 4H33" style="stroke:var(--ink-dim)" stroke-width="1.6"/></svg>Sync call</span>
+      <span><svg width="34" height="8"><path d="M1 4H33" style="stroke:var(--bus)" stroke-width="1.6"/></svg>Kafka topic</span>
+      <span><svg width="34" height="8"><path d="M1 4H33" style="stroke:var(--accent)" stroke-width="1.6" stroke-dasharray="7 5"/></svg>Stream (WebSocket)</span>
+      <span><svg width="34" height="8"><path d="M1 4H33" style="stroke:var(--store)" stroke-width="1.8" stroke-dasharray="1.5 4" stroke-linecap="round"/></svg>Store read / write</span>
+      <span><svg width="34" height="8"><path d="M1 4H33" style="stroke:var(--ext)" stroke-width="1.6" stroke-dasharray="9 4"/></svg>External protocol</span>
+      <b style="margin-top:4px">Badges</b>
+      <span><span class="cv-pill p-cp">CP</span> trip &amp; money <span class="cv-pill p-ap">AP</span> location &amp; market</span>
+    </div>
+
+    <div class="ctl" role="group" aria-label="Zoom">
+      <button id="zin" aria-label="Zoom in">+</button>
+      <button id="zout" aria-label="Zoom out">−</button>
+      <button id="zfit" class="fit" aria-label="Fit to screen">FIT</button>
+    </div>
+
+    <section class="hops" id="hops" aria-live="polite">
+      <header>
+        <h2 id="hopsTitle">Request a ride<small id="hopsSub"></small></h2>
+        <button class="btn" id="replay">▶ Replay</button>
+        <button class="btn" id="hopsMin" aria-label="Collapse hop list">–</button>
+      </header>
+      <ol id="hopList"></ol>
+    </section>
+
+    <aside class="panel" id="panel" aria-label="Component details">
+      <div class="empty">Click any component to see what it does.</div>
+    </aside>
+    <div class="cv-foot">Independent educational study. Not affiliated with or endorsed by Uber. Component names credited to Uber come from its public engineering blog; everything else is an assumption.</div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var root=document.documentElement, mq=matchMedia('(prefers-color-scheme: dark)');
+  function current(){return root.dataset.theme||(mq.matches?'dark':'light');}
+  function label(){var b=document.getElementById('themeToggle');if(b)b.textContent=current()==='dark'?'☀ Light':'☾ Dark';}
+  document.getElementById('themeToggle').addEventListener('click',function(){
+    var next=current()==='dark'?'light':'dark';root.dataset.theme=next;
+    try{localStorage.setItem('sdg-theme',next)}catch(e){}
+    label();document.dispatchEvent(new Event('themechange'));});
+  mq.addEventListener('change',function(){if(!root.dataset.theme){label();document.dispatchEvent(new Event('themechange'));}});
+  label();
+})();
+</script>
+<script>
+
+window.initCanvas=function(){
+const NS='http://www.w3.org/2000/svg';
+const W=176,H=58;
+const ICONS={
+  phone:'<rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/>',
+  router:'<rect x="3" y="4" width="18" height="6" rx="1"/><rect x="3" y="14" width="18" height="6" rx="1"/><path d="M7 7h.01M7 17h.01M11 7h6M11 17h6"/>',
+  waves:'<circle cx="12" cy="12" r="2"/><path d="M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8"/>',
+  tag:'<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.5"/>',
+  route:'<circle cx="6" cy="6" r="2.5"/><rect x="15.5" y="15.5" width="5" height="5"/><path d="M8.2 7.2C15 9 8 15 15.5 17.5"/>',
+  steps:'<rect x="3" y="3" width="7" height="5" rx="1"/><rect x="14" y="10" width="7" height="5" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/><path d="M10 5.5h3.5V10M14 12.5h-3.5v3.5"/>',
+  card:'<rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 10h19M6 15h4"/>',
+  pin:'<path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
+  db:'<ellipse cx="12" cy="5.5" rx="7" ry="2.5"/><path d="M5 5.5v13c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-13M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/>',
+  cache:'<ellipse cx="10" cy="5.5" rx="6" ry="2.3"/><path d="M4 5.5v12c0 1.3 2.7 2.3 6 2.3M16 5.5V10"/><path d="M18.5 11l-3 5h4l-3 5"/>',
+  ledger:'<ellipse cx="10" cy="5.5" rx="6" ry="2.3"/><path d="M4 5.5v12c0 1.3 2.7 2.3 6 2.3M16 5.5V11"/><path d="M14 15h7M14 18.5h7"/>',
+  tsdb:'<ellipse cx="10" cy="5.5" rx="6" ry="2.3"/><path d="M4 5.5v12c0 1.3 2.7 2.3 6 2.3M16 5.5V11"/><circle cx="17.5" cy="17" r="4"/><path d="M17.5 15v2l1.3 1"/>',
+  bank:'<path d="M3 9.5L12 4l9 5.5M4.5 20h15M6 10.5v7M10 10.5v7M14 10.5v7M18 10.5v7"/>',
+  target:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
+  hex:'<path d="M12 2.5l8.2 4.75v9.5L12 21.5l-8.2-4.75v-9.5z"/><path d="M12 8l3.5 2v4L12 16l-3.5-2v-4z"/>',
+  trend:'<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
+  bell:'<path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>',
+  shield:'<path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.2-7.5 9.5-4.3-1.3-7.5-4.9-7.5-9.5V6z"/><path d="M9 12l2 2 4-4"/>',
+  chart:'<path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/>',
+  clock:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  send:'<path d="M21 3L10 14M21 3l-7 18-4-7-7-4z"/>',
+  kafka:'<circle cx="6" cy="12" r="2.2"/><circle cx="17" cy="5.5" r="2.2"/><circle cx="17" cy="18.5" r="2.2"/><path d="M8 11l7-4.5M8 13l7 4.5"/>'
+};
+
+// type: client | edge | cp | ap | cons | store | ext ; plane: CP / AP / null
+const N=[
+ {id:'rider',label:'Rider app',sub:'iOS · Android',x:90,y:180,t:'client',ic:'phone',
+  what:'Shows the upfront price, requests the ride and renders the driver moving toward the pickup.',
+  how:'REST for commands (quote, request, cancel) with an <code>Idempotency-Key</code> on every POST. One WebSocket for live updates; falls back to push + polling <code>GET /v1/trips/{id}</code> when backgrounded.',
+  data:'Nothing authoritative. Caches the active trip and last <code>seq</code> per channel so stale frames are ignored.',
+  scale:'~2.1M riders in a trip at peak plus ~1M waiting. Retries with the same key on flaky networks.'},
+ {id:'driver',label:'Driver app',sub:'ping every 4 s',x:90,y:600,t:'client',ic:'phone',
+  what:'Goes online, streams location, receives offers and drives the trip state forward (arrive, start, complete).',
+  how:'Sends <code>loc</code> frames over the WebSocket every ~4 s (adaptive: slower when parked). Offers arrive as socket frames with a 15 s countdown, mirrored as high-priority push.',
+  data:'Local buffer of pings while offline, flushed through <code>POST /v1/drivers/me/locations</code>.',
+  scale:'~1.5M drivers online at peak → ~375k pings/s.'},
+ {id:'gw',label:'API Gateway',sub:'auth · rate limit · idem',x:300,y:180,t:'edge',ic:'router',
+  what:'Front door for every request/response call from both apps.',
+  how:'Terminates TLS, validates OAuth2 access tokens, applies per-user token-bucket limits and stores <code>idem:{user}:{key}</code> → response for 24 h so a retry gets the same answer.',
+  data:'Idempotency cache (Redis), rate-limit counters.',
+  scale:'Stateless; scaled on RPS. Peak ~1,750 ride requests/s and ~8,700 quotes/s.'},
+ {id:'rt',label:'Realtime Gateway',sub:'4.6M WebSockets',x:300,y:600,t:'edge',ic:'waves',
+  what:'Holds one long-lived socket per app and pushes offers, trip updates and driver positions.',
+  how:'Session registry <code>session:{user_id}</code> → node lets any service address a user. Consumes <code>dispatch.offers</code>, <code>trip.events</code> and per-trip position channels; every frame carries a monotonic <code>seq</code>.',
+  data:'Session registry (TTL refreshed by heartbeat). No business state.',
+  scale:'~50k sockets/node → ~150 nodes with zone headroom. Drains send a reconnect frame; clients reconnect with jitter.'},
+ {id:'fare',label:'Fare Quote',sub:'signed upfront price',x:520,y:60,t:'cp',plane:'CP',ic:'tag',
+  what:'Prices a trip before the rider commits and freezes that price into a quote.',
+  how:'Route time + distance from ETA & Routing, rate card per product, × surge multiplier at the pickup hexagon. Writes <code>quote:{id}</code> (TTL 5 min) with an HMAC signature so the request can’t tamper with it.',
+  data:'Rate cards (config), quote cache in Redis.',
+  scale:'~8.7k quotes/s at peak. Missing surge → last value, then 1.0×; routing down → straight-line × detour factor, flagged <code>estimated</code>.'},
+ {id:'trip',label:'Trip Service',sub:'state machine · CAS',x:520,y:200,t:'cp',plane:'CP',ic:'route',
+  what:'Single writer and source of truth for every trip, from REQUESTED to COMPLETED.',
+  how:'Each command is validated against the current state and written as a compare-and-set on <code>(trip_id, version)</code> together with a TripEvent row and an outbox row in one partition transaction. Illegal transitions return 409. On accept it verifies the driver still holds the offer lease.',
+  data:'Trip, TripEvent, outbox in Docstore, partitioned by <code>trip_id</code>.',
+  scale:'~14k state writes/s at peak. Quorum loss on a partition → 503 for those trips only; apps retry with the same key.'},
+ {id:'cadence',label:'Cadence',sub:'durable post-trip workflow',x:520,y:340,t:'cp',plane:'CP',ic:'steps',
+  what:'Runs everything after the ride as a durable, resumable workflow.',
+  how:'Activities: finalize fare → capture → post ledger journal → receipt → rating prompt. Each activity retries with backoff; workflow state survives worker restarts. Cadence is Uber’s open-source workflow engine.',
+  data:'Workflow history in Cadence’s own store.',
+  scale:'One workflow per completed trip (~30M/day). A stuck capture can wait for days without holding a lock.'},
+ {id:'pay',label:'Payments',sub:'double-entry ledger',x:520,y:480,t:'cp',plane:'CP',ic:'card',
+  what:'Pre-authorizes on request, captures on completion and records every cent as balanced ledger entries.',
+  how:'Capture with PSP idempotency key <code>trip_id:capture</code>. Journal for a $20 fare: debit rider_receivable 20.00 · credit driver_earnings 15.20 · platform_fee 3.60 · tax_payable 1.20 (integer minor units).',
+  data:'Payment, LedgerEntry (append-only), PaymentMethod (PSP token only).',
+  scale:'~1.4k ledger rows/s avg. Capture failure → retry → backup method → rider arrears; the trip is never rolled back.'},
+ {id:'loc',label:'Location Ingest',sub:'validate · snap to H3',x:520,y:690,t:'ap',plane:'AP',ic:'pin',
+  what:'Turns raw GPS pings into clean, H3-indexed location events.',
+  how:'Drops out-of-order pings (by <code>ts</code>), rejects impossible jumps (&gt;250 km/h) and mock-location flags (sent to Fraud), converts lat/lng to an H3 resolution-9 cell, publishes keyed by <code>driver_id</code>.',
+  data:'None durable.',
+  scale:'~375k pings/s peak, ~45 MB/s. Stateless; scaled on CPU.'},
+ {id:'redis',label:'Redis',sub:'lease · quotes · surge',x:740,y:130,t:'store',ic:'cache',
+  what:'Low-latency shared state: the driver offer lease, signed quotes, surge multipliers, sessions.',
+  how:'<code>driver:state:{id}</code> is changed only through a Lua CAS on <code>ver</code>: AVAILABLE → OFFERED with <code>lease_until = now + 15 s</code>. The TTL self-heals if a Dispatch worker dies mid-offer.',
+  data:'driver:state, quote:{id}, surge:{city}:{h3}, session:{user}, idem:{user}:{key}.',
+  scale:'Clustered and replicated with AOF on. The lease is the one CP-ish thing kept here; the trip CAS in Docstore is the backstop.'},
+ {id:'doc',label:'Docstore',sub:'trips · Raft per partition',x:740,y:270,t:'store',ic:'db',
+  what:'Durable store for trips and their event history.',
+  how:'Per Uber’s engineering blog, Docstore evolved from Schemaless and gives strict serializability per partition through Raft, favouring consistency over availability.',
+  data:'Trip, TripEvent, outbox; secondary indexes on (rider_id, created_at) and (driver_id, created_at).',
+  scale:'~120 GB/day of trip data, ~130 TB/yr replicated.'},
+ {id:'ledger',label:'Ledger DB',sub:'append-only journals',x:740,y:410,t:'store',ic:'ledger',
+  what:'The books: every money movement as journals whose entries sum to zero.',
+  how:'One transaction per journal, a constraint that debits = credits, unique idempotency key. Entries are never updated; corrections are new reversing journals.',
+  data:'Journal, LedgerEntry, account balances (derived).',
+  scale:'~120M rows/day. Sharded by account; platform accounts sub-ledgered per city to avoid hot rows.'},
+ {id:'psp',label:'Card processors',sub:'auth · capture',x:740,y:540,t:'ext',ic:'bank',
+  what:'External payment service providers and wallets that actually move card money.',
+  how:'Authorize at request (fare + buffer), capture or void later. Every call carries an idempotency key; settlement files come back daily for reconciliation.',
+  data:'Outside our boundary. We store only tokens and PSP references.',
+  scale:'Outages are absorbed by the workflow: trips still complete, captures retry.'},
+ {id:'kafka',spine:true,label:'KAFKA',x:960,y:480,t:'bus',ic:'kafka',
+  what:'The event backbone that decouples everything that doesn’t have to block the rider.',
+  how:'Topics: <code>driver.location</code> (key driver_id), <code>trip.events</code> (key trip_id), <code>dispatch.offers</code> (key driver_id), <code>marketplace.surge</code> (key h3), <code>payment.events</code> (key trip_id). Idempotent producers, consumers dedupe on <code>event_id</code>.',
+  data:'Short retention for location (hours), longer for trip and payment events; mirrored into the lake.',
+  scale:'Dominated by ~375k location events/s. At-least-once delivery + idempotent consumers = effectively-once processing.'},
+ {id:'dispatch',label:'Dispatch',sub:'match · lease · offer',x:1180,y:100,t:'cp',plane:'CP',ic:'target',
+  what:'Turns a DISPATCHING trip into an accepted driver without ever offering one driver two trips.',
+  how:'k-ring query to the Supply Index → ETA matrix to rank → short-window batch match per city zone (assumed ~1–2 s) → lease CAS in Redis → publish offer. Decline/timeout releases the lease and tries the next candidate.',
+  data:'Lease in Redis; DispatchOffer rows written async for audit and acceptance metrics.',
+  scale:'~2.6k dispatch cycles/s at peak. Workers are sharded by city zone; a dead worker’s leases expire in 15 s.'},
+ {id:'supply',label:'Supply Index',sub:'in-memory · H3 shards',x:1180,y:240,t:'ap',plane:'AP',ic:'hex',
+  what:'Answers “available drivers near this point” in milliseconds.',
+  how:'Each shard owns H3 resolution-5 parents and keeps <code>cell_r9 → {driver → pos, ts, status}</code>. Queries expand k-rings from the pickup cell; boundary rings scatter-gather to the neighbouring shard. Shards placed by consistent hashing, as Uber’s Ringpop did.',
+  data:'Rebuildable in-memory index only.',
+  scale:'Node loss → ring rebalance + ~30 s Kafka replay to warm. Drivers silent for 15 s are excluded.'},
+ {id:'surge',label:'Surge Engine',sub:'1-min window per hex',x:1180,y:380,t:'ap',plane:'AP',ic:'trend',
+  what:'Computes the dynamic price multiplier per hexagon from supply and demand.',
+  how:'Stream job over driver.location (supply) and trip/quote events (demand) in 1-minute tumbling windows per H3 cell, smoothed with neighbours and capped. Uber’s H3 post describes surge as supply vs demand in hexagons.',
+  data:'Writes <code>surge:{city}:{h3}</code> (TTL 120 s) and publishes marketplace.surge; archives every multiplier for audit.',
+  scale:'Stale input → keep last value until TTL, then 1.0×. Never blocks a quote.'},
+ {id:'hist',label:'Location history',sub:'wide-column · 90 d raw',x:1180,y:520,t:'store',ic:'tsdb',
+  what:'Durable trace of where each driver was, for fare disputes, safety reviews and map improvement.',
+  how:'Sink consumer from driver.location. Partition <code>(driver_id, day)</code>, clustered by <code>ts</code>.',
+  data:'~16B rows/day, ~1.9 TB/day raw before compression; raw expired after an assumed 90 days.',
+  scale:'Write-only on the hot path; lag here never affects dispatch.'},
+ {id:'notif',label:'Notifications',sub:'push · SMS · email',x:1180,y:650,t:'cons',ic:'bell',
+  what:'Tells people things when the app isn’t open: driver arriving, receipt, safety check-in.',
+  how:'Consumes trip.events and payment.events, applies user preferences and templates, sends through APNs/FCM/SMS. Deduped on event_id so a replay doesn’t double-notify.',
+  data:'Templates, preferences, delivery log.',
+  scale:'Best effort with retries; nothing upstream waits on it.'},
+ {id:'risk',label:'Fraud & Safety',sub:'spoofing · anomalies',x:1180,y:770,t:'cons',ic:'shield',
+  what:'Scores pings, trips and payments for abuse and checks on riders when a trip looks wrong.',
+  how:'GPS spoofing (mock flags, impossible speed, GPS vs cell/Wi-Fi mismatch), promo abuse via device and payment graphs, long unexpected stops trigger an in-app check-in.',
+  data:'Feature store and risk scores.',
+  scale:'Async by design; can block the next request (not the current trip).'},
+ {id:'lake',label:'Analytics lake',sub:'batch + streaming tables',x:1180,y:880,t:'cons',ic:'chart',
+  what:'Everything lands here for marketplace analysis, ETA model training, finance and regulators.',
+  how:'Streams every topic into partitioned tables; daily reconciliation jobs (trips ↔ captures ↔ PSP settlements) run here.',
+  data:'All events, long retention per policy.',
+  scale:'Off the request path entirely.'},
+ {id:'eta',label:'ETA & Routing',sub:'road graph + ML',x:1410,y:40,t:'ap',plane:'AP',ic:'clock',
+  what:'Travel times for quotes, dispatch ranking and the live pickup ETA.',
+  how:'Road-graph router with live segment speeds (assumption), corrected by an ML model; Uber has published its DeepETA work on this. Dispatch uses a one-to-many matrix call.',
+  data:'Versioned road graph, segment speeds from aggregated traces.',
+  scale:'Stateless replicas per region; model behind a timeout with raw router ETA as fallback.'},
+ {id:'push',label:'APNs / FCM / SMS',sub:'device push',x:1410,y:650,t:'ext',ic:'send',
+  what:'Platform push services and SMS carriers.',
+  how:'High-priority push for offers when the driver socket is down; standard push for receipts and updates.',
+  data:'Outside our boundary.',
+  scale:'Rate-limited by the platforms; we batch and back off.'}
+];
+const SPINE={x:960,y0:78,y1:900,w:64};
+const byId={};N.forEach(n=>byId[n.id]=n);
+
+// [id, from, to, type, label, opts]  opts: bi (both arrows), o1/o2 offsets, hov (label only on hover)
+const E=[
+ ['e1','rider','gw','sync','HTTPS',{hov:1}],
+ ['e2','rider','rt','stream','WebSocket',{bi:1,hov:1}],
+ ['e3','driver','gw','sync','HTTPS',{hov:1}],
+ ['e4','driver','rt','stream','WebSocket',{bi:1,hov:1}],
+ ['e5','gw','fare','sync','POST /fare-quotes',{hov:1}],
+ ['e6','gw','trip','sync','POST /trips · /offers',{hov:1}],
+ ['e7','fare','eta','sync','route ETA',{o1:-12,hov:1}],
+ ['e8','fare','redis','store','quote · surge',{o1:14,hov:1}],
+ ['e9','trip','doc','store','CAS version',{o1:16,hov:1}],
+ ['e10','trip','redis','store','lease check',{o1:-16,hov:1}],
+ ['e11','trip','kafka','event','trip.events',{}],
+ ['e12','trip','cadence','sync','on COMPLETED',{hov:1}],
+ ['e13','cadence','pay','sync','capture',{hov:1}],
+ ['e14','pay','ledger','store','journal',{o1:-16,hov:1}],
+ ['e15','pay','psp','ext','auth / capture',{o1:16,bi:1,hov:1}],
+ ['e16','pay','kafka','event','payment.events',{}],
+ ['e17','rt','loc','sync','pings',{o1:14,hov:1}],
+ ['e18','loc','kafka','event','driver.location',{}],
+ ['e19','kafka','rt','event','offers · trip updates · positions',{o2:-12}],
+ ['e20','kafka','dispatch','event','trip.events',{o1:-12,o2:-12}],
+ ['e21','dispatch','kafka','event','dispatch.offers',{o1:8,o2:8}],
+ ['e22','dispatch','supply','sync','k-ring query',{hov:1}],
+ ['e23','dispatch','eta','sync','ETA matrix',{hov:1}],
+ ['e24','dispatch','redis','store','lease CAS',{o1:22,hov:1}],
+ ['e25','kafka','supply','event','driver.location',{}],
+ ['e26','kafka','surge','event','driver.location',{o1:-12,o2:-12}],
+ ['e27','surge','kafka','event','marketplace.surge',{o1:8,o2:8}],
+ ['e28','surge','redis','store','multiplier',{o1:22,hov:1}],
+ ['e29','kafka','hist','event','driver.location',{}],
+ ['e30','kafka','notif','event','trip · payment',{}],
+ ['e31','notif','push','ext','APNs / FCM',{hov:1}],
+ ['e32','kafka','risk','event','all topics',{}],
+ ['e33','kafka','lake','event','all topics',{}]
+].map(a=>({id:a[0],a:a[1],b:a[2],type:a[3],label:a[4],o:a[5]}));
+const byE={};E.forEach(e=>byE[e.id]=e);
+
+// flows: [edgeId, reverse?, text]
+const FLOWS=[
+ {id:'quote',name:'Get a fare quote',steps:[
+  ['e1',0,'<b>Rider app → API Gateway</b> POST /v1/fare-quotes (pickup, drop-off, product)'],
+  ['e5',0,'<b>API Gateway → Fare Quote</b> authenticated, rate-limited'],
+  ['e7',0,'<b>Fare Quote → ETA &amp; Routing</b> route time and distance'],
+  ['e8',0,'<b>Fare Quote → Redis</b> read surge for the pickup hex, store signed quote (TTL 5 min)']]},
+ {id:'request',name:'Request a ride',steps:[
+  ['e1',0,'<b>Rider app → API Gateway</b> POST /v1/trips + Idempotency-Key'],
+  ['e6',0,'<b>API Gateway → Trip Service</b> validate quote_id, one active trip per rider'],
+  ['e9',0,'<b>Trip Service → Docstore</b> insert REQUESTED → DISPATCHING; rider gets 202'],
+  ['e11',0,'<b>Trip Service → Kafka</b> via outbox','trip.requested'],
+  ['e20',0,'<b>Kafka → Dispatch</b> consume','trip.events'],
+  ['e22',0,'<b>Dispatch → Supply Index</b> k-ring candidates around the pickup cell'],
+  ['e23',0,'<b>Dispatch → ETA &amp; Routing</b> ETA matrix, rank, batch match'],
+  ['e24',0,'<b>Dispatch → Redis</b> lease CAS AVAILABLE → OFFERED (15 s)'],
+  ['e21',0,'<b>Dispatch → Kafka</b> publish offer','dispatch.offers'],
+  ['e19',0,'<b>Kafka → Realtime Gateway</b> route to the driver’s socket','dispatch.offers'],
+  ['e4',1,'<b>Realtime Gateway → Driver app</b> offer card with 15 s timer']]},
+ {id:'accept',name:'Driver accepts',steps:[
+  ['e3',0,'<b>Driver app → API Gateway</b> POST /v1/offers/{id}/accept'],
+  ['e6',0,'<b>API Gateway → Trip Service</b> accept command'],
+  ['e10',0,'<b>Trip Service → Redis</b> lease still held by this driver? else 409'],
+  ['e9',0,'<b>Trip Service → Docstore</b> CAS version → DRIVER_ASSIGNED'],
+  ['e11',0,'<b>Trip Service → Kafka</b> via outbox','trip.driver_assigned'],
+  ['e19',0,'<b>Kafka → Realtime Gateway</b> fan out to rider','trip.events'],
+  ['e2',1,'<b>Realtime Gateway → Rider app</b> driver, car, plate, pickup ETA']]},
+ {id:'ping',name:'Driver location ping',steps:[
+  ['e4',0,'<b>Driver app → Realtime Gateway</b> loc frame every ~4 s'],
+  ['e17',0,'<b>Realtime Gateway → Location Ingest</b> validate, snap to H3 r9'],
+  ['e18',0,'<b>Location Ingest → Kafka</b> keyed by driver_id','driver.location'],
+  ['e25',0,'<b>Kafka → Supply Index</b> move driver between cells','driver.location'],
+  ['e26',0,'<b>Kafka → Surge Engine</b> count supply per hex','driver.location'],
+  ['e29',0,'<b>Kafka → Location history</b> durable trace','driver.location'],
+  ['e19',0,'<b>Kafka → Realtime Gateway</b> position for the trip’s rider','driver.location'],
+  ['e2',1,'<b>Realtime Gateway → Rider app</b> car moves on the map, ETA refreshes']]},
+ {id:'complete',name:'Complete & pay',steps:[
+  ['e3',0,'<b>Driver app → API Gateway</b> POST /v1/trips/{id}/complete (If-Match version)'],
+  ['e6',0,'<b>API Gateway → Trip Service</b> finalize fare vs quote'],
+  ['e9',0,'<b>Trip Service → Docstore</b> CAS → COMPLETED'],
+  ['e12',0,'<b>Trip Service → Cadence</b> start post-trip workflow'],
+  ['e13',0,'<b>Cadence → Payments</b> capture activity'],
+  ['e15',0,'<b>Payments → Card processors</b> capture with key trip_id:capture'],
+  ['e14',0,'<b>Payments → Ledger DB</b> journal: debits = credits'],
+  ['e16',0,'<b>Payments → Kafka</b> publish','payment.captured'],
+  ['e30',0,'<b>Kafka → Notifications</b> build receipt','payment.events'],
+  ['e31',0,'<b>Notifications → APNs / FCM</b> receipt + rating prompt']]}
+];
+
+const svg=document.getElementById('cv'),world=document.getElementById('world'),
+  gE=document.getElementById('edges'),gN=document.getElementById('nodes'),gP=document.getElementById('pulses');
+function el(tag,attrs,parent){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e;}
+
+// ---- nodes
+N.forEach(n=>{
+  const g=el('g',{class:'node '+(n.spine?'spine':'t-'+n.t),tabindex:0,role:'button','aria-label':n.label.replace('KAFKA','Kafka')},gN);
+  n.g=g;
+  if(n.spine){
+    el('rect',{class:'box',x:SPINE.x-SPINE.w/2,y:SPINE.y0,width:SPINE.w,height:SPINE.y1-SPINE.y0,rx:10},g);
+    const ic=el('svg',{x:SPINE.x-13,y:SPINE.y0+14,width:26,height:26,viewBox:'0 0 24 24',class:'ic'},g);ic.innerHTML=ICONS.kafka;
+    const t=el('text',{class:'sl',x:SPINE.x+5,y:(SPINE.y0+SPINE.y1)/2,'text-anchor':'middle',transform:`rotate(-90 ${SPINE.x+5} ${(SPINE.y0+SPINE.y1)/2})`},g);t.textContent='KAFKA · EVENT BACKBONE';
+  } else {
+    g.setAttribute('transform',`translate(${n.x-W/2} ${n.y-H/2})`);
+    el('rect',{class:'box',width:W,height:H,rx:n.t==='store'?16:3},g);
+    el('rect',{class:'badge',x:10,y:11,width:36,height:36,rx:n.t==='store'?10:2},g);
+    const ic=el('svg',{x:16,y:17,width:24,height:24,viewBox:'0 0 24 24',class:'ic'},g);ic.innerHTML=ICONS[n.ic];
+    el('text',{class:'nl',x:56,y:26},g).textContent=n.label;
+    el('text',{class:'ns',x:56,y:43},g).textContent=n.sub;
+  }
+});
+
+// ---- edge geometry
+function side(n,ox,oy){ // which side of n faces point (ox,oy)
+  const dx=ox-n.x,dy=oy-n.y;
+  return Math.abs(dx)*H>Math.abs(dy)*W ? (dx>0?'r':'l') : (dy>0?'b':'t');
+}
+function anchor(n,other,off){
+  off=off||0;
+  if(n.spine){
+    const y=Math.max(SPINE.y0+50,Math.min(SPINE.y1-14,other.y+off));
+    return other.x<SPINE.x?{x:SPINE.x-SPINE.w/2,y,s:'l'}:{x:SPINE.x+SPINE.w/2,y,s:'r'};
+  }
+  const s=side(n,other.x,other.spine?n.y:other.y);
+  if(s==='r')return{x:n.x+W/2,y:n.y+off,s};
+  if(s==='l')return{x:n.x-W/2,y:n.y+off,s};
+  if(s==='b')return{x:n.x+off,y:n.y+H/2,s};
+  return{x:n.x+off,y:n.y-H/2,s};
+}
+const DIR={r:[1,0],l:[-1,0],b:[0,1],t:[0,-1]};
+function pathFor(e){
+  const A=byId[e.a],B=byId[e.b];
+  const p1=anchor(A,B,e.o.o1),p2=anchor(B,A,e.o.o2!=null?e.o.o2:(A.spine?0:e.o.o1));
+  // spine side y follows the node end so event edges run level
+  if(A.spine)p1.y=Math.max(SPINE.y0+50,Math.min(SPINE.y1-14,p2.y));
+  if(B.spine)p2.y=Math.max(SPINE.y0+50,Math.min(SPINE.y1-14,p1.y));
+  const d=Math.hypot(p2.x-p1.x,p2.y-p1.y),c=Math.max(24,Math.min(160,d*.42));
+  const d1=DIR[p1.s],d2=DIR[p2.s];
+  return `M${p1.x} ${p1.y}C${p1.x+d1[0]*c} ${p1.y+d1[1]*c} ${p2.x+d2[0]*c} ${p2.y+d2[1]*c} ${p2.x} ${p2.y}`;
+}
+E.forEach(e=>{
+  const g=el('g',{class:'edge e-'+e.type},gE);e.g=g;
+  const d=pathFor(e);
+  el('path',{class:'hit',d},g);
+  const ln=el('path',{class:'ln',d,'marker-end':`url(#m-${e.type})`},g);
+  if(e.o.bi)ln.setAttribute('marker-start',`url(#m-${e.type})`);
+  e.ln=ln;
+  const L=ln.getTotalLength(),toSpine=byId[e.b].spine,fromSpine=byId[e.a].spine;
+  const t=fromSpine?.5:toSpine?.5:.5;
+  const pt=ln.getPointAtLength(L*t);
+  const tx=el('text',{class:'lbl'+(e.o.hov?' hov':''),x:pt.x,y:pt.y-6,'text-anchor':'middle'},g);tx.textContent=e.label;
+  g.addEventListener('mouseenter',()=>{if(!flowActive())hoverEdge(e,true)});
+  g.addEventListener('mouseleave',()=>{if(!flowActive())hoverEdge(e,false)});
+});
+const adj={};N.forEach(n=>adj[n.id]=[]);E.forEach(e=>{adj[e.a].push(e);adj[e.b].push(e);});
+
+// ---- hover / highlight
+let curFlow=null,selNode=null;
+function flowActive(){return !!curFlow}
+function clearHot(){svg.classList.remove('dim');document.querySelectorAll('.hot').forEach(x=>x.classList.remove('hot'));}
+function hoverNode(n,on){
+  clearHot(); if(!on)return;
+  svg.classList.add('dim');n.g.classList.add('hot');
+  adj[n.id].forEach(e=>{e.g.classList.add('hot');byId[e.a].g.classList.add('hot');byId[e.b].g.classList.add('hot');});
+}
+function hoverEdge(e,on){clearHot();if(!on)return;svg.classList.add('dim');e.g.classList.add('hot');byId[e.a].g.classList.add('hot');byId[e.b].g.classList.add('hot');}
+N.forEach(n=>{
+  n.g.addEventListener('mouseenter',()=>{if(!flowActive())hoverNode(n,true)});
+  n.g.addEventListener('mouseleave',()=>{if(!flowActive())hoverNode(n,false)});
+  n.g.addEventListener('focus',()=>{if(!flowActive())hoverNode(n,true)});
+  n.g.addEventListener('blur',()=>{if(!flowActive())hoverNode(n,false)});
+  n.g.addEventListener('click',ev=>{if(moved)return;openPanel(n)});
+  n.g.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();openPanel(n)}});
+});
+
+// ---- panel
+const panel=document.getElementById('panel');
+const BADGE={client:['var(--ok-bg)','var(--accent)'],edge:['var(--surface-2)','var(--ink)'],cp:['var(--info-bg)','var(--info)'],ap:['var(--warn-bg)','var(--warn)'],cons:['var(--surface-2)','var(--ink)'],store:['var(--store-bg)','var(--store)'],ext:['var(--ext-bg)','var(--ext)'],bus:['var(--bus-bg)','var(--bus)']};
+const TYPE={client:'Client',edge:'Edge',cp:'Service',ap:'Service',cons:'Consumer',store:'Data store',ext:'External',bus:'Event bus'};
+function nm(id){const n=byId[id];return n.spine?'Kafka':n.label}
+function openPanel(n){
+  if(selNode)selNode.g.classList.remove('sel');selNode=n;n.g.classList.add('sel');
+  const b=BADGE[n.t];
+  const tags=[`<span class="cv-pill p-n">${TYPE[n.t]}</span>`];
+  if(n.plane==='CP')tags.push('<span class="cv-pill p-cp">CP</span>');
+  if(n.plane==='AP')tags.push('<span class="cv-pill p-ap">AP</span>');
+  if(n.t==='store')tags.push('<span class="cv-pill p-store">STORE</span>');
+  if(n.t==='ext')tags.push('<span class="cv-pill p-ext">EXTERNAL</span>');
+  const ev=adj[n.id].filter(e=>e.type==='event');
+  const emits=ev.filter(e=>e.a===n.id),cons=ev.filter(e=>e.b===n.id);
+  const calls=adj[n.id].filter(e=>e.type!=='event');
+  const li=(k,cls,e,other)=>`<li><span class="k ${cls}">${k}</span><span><button class="nb" data-go="${other}">${nm(other)}</button> · <span style="font-family:var(--font-mono);font-size:11px">${e.label}</span></span></li>`;
+  let evHtml='';
+  if(n.spine){evHtml='<p>Producers: Trip Service, Payments, Location Ingest, Dispatch, Surge Engine. Consumers: Dispatch, Supply Index, Surge Engine, Location history, Notifications, Fraud &amp; Safety, Analytics lake, Realtime Gateway.</p>';}
+  else if(!ev.length){evHtml='<p>None directly.</p>';}
+  else evHtml='<ul>'+emits.map(e=>li('emits','out',e,e.b)).join('')+cons.map(e=>li('consumes','in',e,e.a)).join('')+'</ul>';
+  const callsHtml=calls.length?'<ul>'+calls.map(e=>e.a===n.id?li('calls','out',e,e.b):li('called by','in',e,e.a)).join('')+'</ul>':'<p>Only through Kafka.</p>';
+  panel.innerHTML=`<header><div class="pb" style="background:${b[0]};border-color:${b[1]}"><svg viewBox="0 0 24 24" style="stroke:${b[1]}">${ICONS[n.ic]}</svg></div>
+    <div style="min-width:0"><h2>${nm(n.id)}</h2><div class="tags">${tags.join('')}</div></div>
+    <button class="x" aria-label="Close details" id="pClose">×</button></header>
+    <div class="body">
+      <h3>What it does</h3><p>${n.what}</p>
+      <h3>How it works</h3><p>${n.how}</p>
+      <h3>Data owned</h3><p>${n.data}</p>
+      <h3>Scale &amp; failure</h3><p>${n.scale}</p>
+      <h3>Events emitted &amp; consumed</h3>${evHtml}
+      <h3>Talks to</h3>${callsHtml}
+    </div>`;
+  panel.classList.add('open');
+  panel.querySelector('#pClose').onclick=closePanel;
+  panel.querySelectorAll('[data-go]').forEach(bt=>bt.onclick=()=>{const t=byId[bt.dataset.go];openPanel(t);centerOn(t)});
+}
+function closePanel(){panel.classList.remove('open');if(selNode)selNode.g.classList.remove('sel');selNode=null;}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closePanel()});
+
+// ---- pan / zoom
+const view={k:1,x:0,y:0};
+function apply(){world.setAttribute('transform',`translate(${view.x} ${view.y}) scale(${view.k})`);}
+const BOUNDS={x0:0,y0:0,x1:1500,y1:920};
+function fit(){
+  const r=svg.getBoundingClientRect(),pad=24,leg=r.width>760?272:0;
+  const side=r.width>760&&panel.classList.contains('open')?380:0;
+  const below=r.width<=760&&!hopsBox.hidden?hopsBox.offsetHeight:0;
+  const ctl=r.width>760?56:0;
+  const w=r.width-pad*2-leg-side-ctl,h=r.height-pad*2-below;
+  const bw=BOUNDS.x1-BOUNDS.x0,bh=BOUNDS.y1-BOUNDS.y0;
+  view.k=Math.max(.2,Math.min(1.4,Math.min(w/bw,h/bh)));
+  view.x=pad+leg+(w-bw*view.k)/2-BOUNDS.x0*view.k;
+  view.y=pad+(h-bh*view.k)/2-BOUNDS.y0*view.k;
+  apply();
+}
+function zoomAt(f,cx,cy){
+  const k2=Math.max(.2,Math.min(3,view.k*f));
+  view.x=cx-(cx-view.x)*k2/view.k;view.y=cy-(cy-view.y)*k2/view.k;view.k=k2;apply();
+}
+function centerOn(n){
+  const r=svg.getBoundingClientRect(),narrow=r.width<=760;
+  const cx=narrow?r.width/2:(r.width-(panel.classList.contains('open')?380:0))/2;
+  const cy=narrow?r.height*0.22:r.height/2;
+  view.x=cx-n.x*view.k;view.y=cy-n.y*view.k;apply();
+}
+svg.addEventListener('wheel',e=>{e.preventDefault();const r=svg.getBoundingClientRect();zoomAt(Math.exp(-e.deltaY*0.0015),e.clientX-r.left,e.clientY-r.top)},{passive:false});
+document.getElementById('zin').onclick=()=>{const r=svg.getBoundingClientRect();zoomAt(1.25,r.width/2,r.height/2)};
+document.getElementById('zout').onclick=()=>{const r=svg.getBoundingClientRect();zoomAt(.8,r.width/2,r.height/2)};
+document.getElementById('zfit').onclick=fit;
+const ptrs=new Map();let moved=false,start=null,pinch=null;
+svg.addEventListener('pointerdown',e=>{
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});moved=false;
+  if(ptrs.size===1){start={x:e.clientX,y:e.clientY,vx:view.x,vy:view.y};}
+  if(ptrs.size===2){const p=[...ptrs.values()];pinch={d:Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y),k:view.k};}
+});
+svg.addEventListener('pointermove',e=>{
+  if(!ptrs.has(e.pointerId))return;ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(ptrs.size===2&&pinch){const p=[...ptrs.values()],r=svg.getBoundingClientRect();
+    const d=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);moved=true;
+    zoomAt((pinch.k*d/pinch.d)/view.k,(p[0].x+p[1].x)/2-r.left,(p[0].y+p[1].y)/2-r.top);return;}
+  if(start){const dx=e.clientX-start.x,dy=e.clientY-start.y;
+    if(!moved&&Math.hypot(dx,dy)>4){moved=true;svg.classList.add('dragging');try{svg.setPointerCapture(e.pointerId)}catch(_){}}
+    if(moved){view.x=start.vx+dx;view.y=start.vy+dy;apply();}}
+});
+function up(e){ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=null;if(!ptrs.size){start=null;svg.classList.remove('dragging');setTimeout(()=>moved=false,0);}}
+svg.addEventListener('pointerup',up);svg.addEventListener('pointercancel',up);
+document.getElementById('bgrect').addEventListener('click',()=>{if(!moved&&!curFlow)clearHot()});
+
+// ---- flows
+const chips=document.getElementById('chips'),hopList=document.getElementById('hopList'),
+  hopsBox=document.getElementById('hops'),hopsTitle=document.getElementById('hopsTitle');
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+let anim=null;
+FLOWS.forEach(f=>{
+  const b=document.createElement('button');b.className='chip';b.id='chip-'+f.id;b.setAttribute('aria-pressed','false');
+  b.innerHTML='<span class="dot"></span>'+f.name;b.onclick=()=>curFlow===f?stopFlow():selectFlow(f,true);chips.appendChild(b);f.btn=b;
+});
+function stopFlow(){
+  curFlow=null;cancelAnim();clearHot();document.querySelectorAll('.on').forEach(x=>x.classList.remove('on'));
+  FLOWS.forEach(f=>f.btn.setAttribute('aria-pressed','false'));hopsBox.hidden=true;
+}
+function selectFlow(f,play){
+  cancelAnim();clearHot();document.querySelectorAll('.on').forEach(x=>x.classList.remove('on'));
+  curFlow=f;FLOWS.forEach(x=>x.btn.setAttribute('aria-pressed',x===f?'true':'false'));
+  svg.classList.add('dim');
+  f.steps.forEach(s=>{const e=byE[s[0]];e.g.classList.add('on');byId[e.a].g.classList.add('on');byId[e.b].g.classList.add('on');});
+  hopsBox.hidden=false;
+  hopsTitle.innerHTML=f.name+`<small>${f.steps.length} hops · click a hop to replay from there</small>`;
+  hopList.innerHTML=f.steps.map((s,i)=>`<li data-i="${i}"><span>${s[2]}${s[3]?`<span class="t">${s[3]}</span>`:''}</span></li>`).join('');
+  hopList.querySelectorAll('li').forEach(li=>li.onclick=()=>play_(+li.dataset.i));
+  if(play)play_(0);
+}
+function cancelAnim(){if(anim){cancelAnimationFrame(anim.raf);anim=null;}gP.innerHTML='';hopList.querySelectorAll('.cur').forEach(x=>x.classList.remove('cur'));}
+function play_(from){
+  cancelAnim();const f=curFlow;if(!f)return;
+  const dot=el('circle',{r:7},gP);
+  const items=[...hopList.children];
+  if(reduce){items[items.length-1].classList.add('cur');gP.innerHTML='';return;}
+  let i=from,t0=null;const DUR=850;
+  anim={raf:0};
+  function frame(ts){
+    if(!anim)return;
+    if(t0===null){t0=ts;items.forEach(x=>x.classList.remove('cur'));items[i].classList.add('cur');const li=items[i],top=li.offsetTop-hopList.offsetTop;
+      if(top<hopList.scrollTop||top+li.offsetHeight>hopList.scrollTop+hopList.clientHeight)hopList.scrollTop=top-8;}
+    const s=f.steps[i],e=byE[s[0]],L=e.ln.getTotalLength();
+    let p=Math.min(1,(ts-t0)/DUR);p=p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+    const pt=e.ln.getPointAtLength((s[1]?1-p:p)*L);dot.setAttribute('cx',pt.x);dot.setAttribute('cy',pt.y);
+    if(ts-t0>=DUR+120){i++;t0=null;if(i>=f.steps.length){anim=null;setTimeout(()=>{if(!anim)gP.innerHTML=''},400);return;}}
+    anim.raf=requestAnimationFrame(frame);
+  }
+  anim.raf=requestAnimationFrame(frame);
+}
+document.getElementById('replay').onclick=()=>{if(curFlow)play_(0)};
+document.getElementById('hopsMin').onclick=function(){const m=hopsBox.classList.toggle('min');this.textContent=m?'+':'–';this.setAttribute('aria-label',m?'Expand hop list':'Collapse hop list');};
+
+// ---- boot
+window.addEventListener('resize',()=>{if(svg.getBoundingClientRect().width)fit()});
+window.__cvFit=fit;
+selectFlow(FLOWS[1],true);
+fit();
+};
+</script>
+<script>
+(function(){
+  var toc=document.getElementById('toc'), fab=document.getElementById('tocFab');
+  function setOpen(o){toc.classList.toggle('open',o);fab.setAttribute('aria-expanded',o?'true':'false');}
+  fab.addEventListener('click',function(e){e.stopPropagation();setOpen(!toc.classList.contains('open'));});
+  toc.addEventListener('click',function(e){if(e.target.closest('a'))setOpen(false);});
+  document.addEventListener('click',function(e){if(toc.classList.contains('open')&&!toc.contains(e.target))setOpen(false);});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')setOpen(false);});
+  var items=[].slice.call(toc.querySelectorAll('li'));
+  var secs=items.map(function(li){return document.querySelector(li.querySelector('a').getAttribute('href'));});
+  function spy(){
+    var y=window.scrollY+120, idx=0;
+    secs.forEach(function(s,i){if(s&&s.offsetTop<=y)idx=i;});
+    items.forEach(function(li,i){li.classList.toggle('active',i===idx);li.classList.toggle('done',i<idx);});
+  }
+  window.addEventListener('scroll',spy,{passive:true});spy();
+})();
+</script>
+<script>
+(function(){
+  var guide=document.getElementById('guideView'),canvas=document.getElementById('canvasView'),
+      root=document.documentElement,hdr=document.querySelector('.topbar'),inited=false,last=null;
+  function setH(){root.style.setProperty('--hdr',hdr.offsetHeight+'px');}
+  window.__view=function(){return canvas.hidden?'guide':'canvas';};
+  function show(){
+    var v=location.hash==='#canvas'?'canvas':'guide';
+    guide.hidden=v!=='guide';canvas.hidden=v!=='canvas';
+    root.classList.toggle('canvas-mode',v==='canvas');
+    document.querySelectorAll('.tabs a').forEach(function(a){
+      if(a.dataset.view===v)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
+    setH();
+    if(v==='canvas'){
+      window.scrollTo(0,0);
+      requestAnimationFrame(function(){
+        if(!inited){inited=true;window.initCanvas();}else if(window.__cvFit)window.__cvFit();});
+    } else if(last==='canvas'&&location.hash.length>1){
+      var t=document.getElementById(location.hash.slice(1));if(t)t.scrollIntoView();
+    }
+    last=v;
+    document.dispatchEvent(new CustomEvent('viewchange',{detail:v}));
+  }
+  window.addEventListener('hashchange',show);window.addEventListener('resize',setH);
+  show();
+})();
+</script>
+<script type="module">
+
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
+const blocks=[...document.querySelectorAll('[data-mmd]')];
+const v=n=>getComputedStyle(document.documentElement).getPropertyValue('--'+n).trim();
+let run=0;
+async function render(){
+  const r=++run;
+  mermaid.initialize({startOnLoad:false,securityLevel:'strict',theme:'base',fontFamily:v('font-body')||'Inter Tight, sans-serif',
+    flowchart:{curve:'basis',padding:12},
+    themeVariables:{background:v('surface'),mainBkg:v('surface-2'),primaryColor:v('surface-2'),
+      primaryBorderColor:v('accent'),primaryTextColor:v('ink'),secondaryColor:v('surface-2'),
+      tertiaryColor:v('surface'),lineColor:v('ink-dim'),textColor:v('ink'),nodeBorder:v('line'),
+      clusterBkg:v('bg'),clusterBorder:v('line'),edgeLabelBackground:v('surface'),classText:v('ink'),
+      fontSize:'14px'}});
+  for(let i=0;i<blocks.length;i++){
+    const b=blocks[i];
+    const src=document.getElementById(b.dataset.mmd).textContent.replace(/var\(--([a-z0-9-]+)\)/g,(_,n)=>v(n));
+    try{
+      const {svg}=await mermaid.render('mmd-'+i+'-'+r,src);
+      if(r===run){
+        b.innerHTML=svg;
+        const el=b.querySelector('svg'), mw=parseFloat(el&&el.style.maxWidth);
+        if(mw){el.style.width=mw+'px';el.style.maxWidth='none';}
+      }
+    }catch(e){console.error(e);b.innerHTML='<span class="loading">Diagram failed to render.</span>';}
+  }
+}
+let renderedTheme=null;
+const curTheme=()=>document.documentElement.dataset.theme||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+async function maybeRender(){
+  if(window.__view&&window.__view()!=='guide')return;
+  const t=curTheme(); if(renderedTheme===t)return; renderedTheme=t; await render();
+}
+await maybeRender();
+document.addEventListener('themechange',()=>{renderedTheme=null;maybeRender();});
+document.addEventListener('viewchange',maybeRender);
+
+</script>
+</body>
+</html>

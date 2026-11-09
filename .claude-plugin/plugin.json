@@ -1,6 +1,6 @@
 {
   "name": "system-design-studio",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Turn \"design X\" into a full system design guide: requirements, capacity, architecture and ER diagrams, schema, APIs and trade-offs, in light and dark themes.",
   "author": {
     "name": "Prasoon Soni"
