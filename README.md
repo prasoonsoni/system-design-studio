@@ -79,13 +79,15 @@ For a single project instead, put it in that project's `.claude/skills/system-de
 
 ### Option 3: Claude apps (claude.ai, desktop, mobile)
 
-1. Download **`system-design-studio.zip`** from the [latest release](https://github.com/prasoonsoni/system-design-studio/releases/latest), or build it yourself:
+1. Build the skill ZIP:
 
    ```bash
    git clone https://github.com/prasoonsoni/system-design-studio.git
    cd system-design-studio/skills
    zip -r system-design-studio.zip system-design-studio
    ```
+
+   Without git: download [`SKILL.md`](skills/system-design-studio/SKILL.md), put it in a folder named exactly `system-design-studio`, and compress that folder to `system-design-studio.zip`. The folder name must match the skill name.
 
 2. In Claude, open **Customize → Skills**, click **+**, choose **Create skill → Upload a skill**, and select the ZIP.
 3. Make sure the skill is switched on in your skills list.
