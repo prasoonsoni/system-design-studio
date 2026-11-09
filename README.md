@@ -19,6 +19,7 @@ A Claude skill that turns *"design Uber"* or *"HLD for a payment gateway"* into 
 - [Example: stock broker platform](#example-stock-broker-platform)
 - [Repository layout](#repository-layout)
 - [Disclaimer](#disclaimer)
+- [License](#license)
 
 ## What you get
 
@@ -178,3 +179,7 @@ system-design-studio/
 ## Disclaimer
 
 Guides about real companies are independent educational studies. They are not affiliated with or endorsed by those companies, and their architectures are reconstructed from public sources and stated assumptions. Capacity numbers are order-of-magnitude estimates for design discussions, not production figures.
+
+## License
+
+[MIT](LICENSE) © Prasoon Soni

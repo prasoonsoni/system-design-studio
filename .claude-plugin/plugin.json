@@ -6,5 +6,11 @@
     "name": "Prasoon Soni"
   },
   "repository": "https://github.com/prasoonsoni/system-design-studio",
-  "keywords": ["system-design", "hld", "architecture", "interview-prep"]
+  "keywords": [
+    "system-design",
+    "hld",
+    "architecture",
+    "interview-prep"
+  ],
+  "license": "MIT"
 }
