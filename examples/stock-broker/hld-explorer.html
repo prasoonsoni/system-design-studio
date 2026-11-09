@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stock Broker Platform — HLD Explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  color-scheme: dark;
+  --bg:#0b0f1a;
+  --bg-grid:#111726;
+  --surface:#141b2c;
+  --surface-2:#1a2338;
+  --surface-3:#212c46;
+  --line:#26314e;
+  --line-soft:#1d2740;
+  --ink:#e8edf9;
+  --ink-mid:#aab6d0;
+  --ink-dim:#7885a3;
+  --primary:#57bdd6;
+  --primary-soft:#57bdd622;
+  /* functional layer hues */
+  --client:#6ea8fe;
+  --edge:#b18bfa;
+  --core:#4fc3d8;
+  --bus:#f2a24c;
+  --data:#8fa0bd;
+  --external:#fb7a92;
+  --pos:#3ddc97;
+  --neg:#f5776f;
+  --radius:14px;
+  --radius-sm:9px;
+  --shadow:0 1px 0 rgba(255,255,255,.03), 0 12px 30px -18px rgba(0,0,0,.8);
+  --font-display:"Space Grotesk",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-body:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:
+    radial-gradient(1100px 500px at 82% -8%, #17203a 0%, transparent 60%),
+    radial-gradient(900px 420px at 5% 4%, #131b30 0%, transparent 55%),
+    var(--bg);
+  color:var(--ink);
+  font-family:var(--font-body);
+  font-size:15px;
+  line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+  min-height:100vh;
+}
+.wrap{max-width:1180px;margin:0 auto;padding:0 20px 80px}
+
+/* ---------- ticker ---------- */
+.ticker{
+  border-bottom:1px solid var(--line-soft);
+  background:rgba(10,14,24,.6);
+  overflow:hidden;white-space:nowrap;
+}
+.ticker-track{display:inline-block;padding:7px 0;animation:slide 46s linear infinite}
+@keyframes slide{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.tk{display:inline-flex;gap:7px;align-items:baseline;margin:0 22px;font-family:var(--font-mono);font-size:12.5px}
+.tk .sym{color:var(--ink-mid);letter-spacing:.02em}
+.tk .px{color:var(--ink)}
+.tk .up{color:var(--pos)}
+.tk .dn{color:var(--neg)}
+@media (prefers-reduced-motion:reduce){.ticker-track{animation:none}}
+
+/* ---------- header ---------- */
+header{padding:40px 0 22px}
+.kicker{font-family:var(--font-mono);font-size:12px;color:var(--primary);margin:0 0 14px;letter-spacing:.03em}
+h1{
+  font-family:var(--font-display);font-weight:600;
+  font-size:clamp(28px,4.6vw,46px);line-height:1.03;letter-spacing:-.02em;
+  margin:0 0 14px;max-width:16ch;
+}
+.lede{color:var(--ink-mid);max-width:62ch;margin:0;font-size:16px}
+.lede b{color:var(--ink);font-weight:600}
+
+/* ---------- controls ---------- */
+.toolbar{display:flex;flex-wrap:wrap;gap:14px 20px;align-items:center;margin:26px 0 8px}
+.seg{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:4px}
+.seg button{
+  font-family:var(--font-display);font-weight:500;font-size:14px;
+  color:var(--ink-dim);background:transparent;border:0;cursor:pointer;
+  padding:8px 16px;border-radius:8px;transition:color .15s,background .15s;
+}
+.seg button[aria-selected="true"]{background:var(--surface-3);color:var(--ink)}
+.seg button:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--ink-dim);margin-left:auto}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.dot{width:9px;height:9px;border-radius:3px;display:inline-block}
+
+/* ---------- architecture ---------- */
+.map{margin-top:26px;display:flex;flex-direction:column;gap:14px}
+.band{
+  position:relative;border:1px solid var(--line-soft);border-radius:var(--radius);
+  background:linear-gradient(180deg,var(--surface) 0%, #12192a 100%);
+  padding:15px 16px 16px 78px;
+}
+.band-label{
+  position:absolute;left:0;top:0;bottom:0;width:60px;
+  display:flex;align-items:center;justify-content:center;
+  border-right:1px solid var(--line-soft);
+}
+.band-label span{
+  transform:rotate(-90deg);white-space:nowrap;font-family:var(--font-mono);
+  font-size:11px;letter-spacing:.14em;color:var(--ink-dim);
+}
+.band::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:3px;background:var(--accent)}
+.row{display:flex;flex-wrap:wrap;gap:11px}
+.node{
+  --accent:var(--core);
+  flex:1 1 150px;min-width:140px;text-align:left;cursor:pointer;
+  background:var(--surface-2);border:1px solid var(--line);
+  border-radius:var(--radius-sm);padding:13px 14px;color:var(--ink);
+  transition:transform .13s ease, border-color .15s, background .15s;
+  display:flex;flex-direction:column;gap:9px;
+}
+.node:hover{transform:translateY(-2px);border-color:var(--accent);background:var(--surface-3)}
+.node:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.node.active{border-color:var(--accent);background:var(--surface-3);box-shadow:0 0 0 1px var(--accent) inset}
+.node .ic{width:26px;height:26px;color:var(--accent);flex:0 0 auto}
+.node .nm{font-family:var(--font-display);font-weight:500;font-size:14.5px;line-height:1.2}
+.node .kd{font-size:12px;color:var(--ink-dim);line-height:1.35}
+.node.wide{flex-basis:100%}
+.node.bus-node{--accent:var(--bus);background:linear-gradient(90deg,#1b2033,#1d2440);flex-direction:row;align-items:center;gap:14px}
+.node.bus-node .txt{display:flex;flex-direction:column;gap:3px}
+.node.bus-node .topics{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.topic{font-family:var(--font-mono);font-size:11px;color:var(--bus);background:#f2a24c14;border:1px solid #f2a24c33;border-radius:6px;padding:2px 7px}
+.flowcue{text-align:center;color:var(--ink-dim);font-size:11px;font-family:var(--font-mono);letter-spacing:.08em;margin:-4px 0}
+
+/* layer accent map */
+.band[data-layer="client"]{--accent:var(--client)} .band[data-layer="client"] .node{--accent:var(--client)}
+.band[data-layer="edge"]{--accent:var(--edge)} .band[data-layer="edge"] .node{--accent:var(--edge)}
+.band[data-layer="core"]{--accent:var(--core)} .band[data-layer="core"] .node{--accent:var(--core)}
+.band[data-layer="bus"]{--accent:var(--bus)}
+.band[data-layer="data"]{--accent:var(--data)} .band[data-layer="data"] .node{--accent:var(--data)}
+.band[data-layer="external"]{--accent:var(--external)} .band[data-layer="external"] .node{--accent:var(--external)}
+
+/* ---------- order flow ---------- */
+.flow{margin-top:26px;display:none;position:relative;padding-left:8px}
+.flow.on{display:block}
+.map.off{display:none}
+.flow-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:20px}
+.flow-head p{margin:0;color:var(--ink-mid);font-size:14px;max-width:58ch}
+.btn{
+  font-family:var(--font-display);font-weight:500;font-size:13.5px;cursor:pointer;
+  background:var(--primary);color:#04121a;border:0;border-radius:9px;padding:9px 16px;
+}
+.btn.ghost{background:var(--surface-2);color:var(--ink);border:1px solid var(--line)}
+.btn:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.steps{position:relative;margin:0;padding:0;list-style:none}
+.steps::before{content:"";position:absolute;left:19px;top:12px;bottom:12px;width:2px;background:var(--line)}
+.step{position:relative;padding:2px 0 20px 56px;cursor:pointer}
+.step:last-child{padding-bottom:0}
+.step .num{
+  position:absolute;left:6px;top:0;width:28px;height:28px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-mono);font-size:13px;font-weight:500;
+  background:var(--surface-3);color:var(--ink-mid);border:2px solid var(--line);z-index:1;
+  transition:background .18s,color .18s,border-color .18s,transform .18s;
+}
+.step .st-nm{font-family:var(--font-display);font-weight:500;font-size:15.5px;color:var(--ink);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.step .actor{font-family:var(--font-mono);font-size:11px;color:var(--primary);background:var(--primary-soft);border:1px solid #57bdd633;border-radius:6px;padding:1px 7px}
+.step .st-desc{color:var(--ink-mid);font-size:13.5px;margin-top:4px;max-width:64ch}
+.step:hover .num{border-color:var(--primary);color:var(--ink)}
+.step.active .num{background:var(--primary);color:#04121a;border-color:var(--primary);transform:scale(1.08)}
+.step.active .st-nm{color:var(--primary)}
+.step:focus-visible{outline:2px solid var(--primary);outline-offset:3px;border-radius:8px}
+
+/* ---------- detail panel ---------- */
+.scrim{position:fixed;inset:0;background:rgba(5,8,15,.55);backdrop-filter:blur(2px);opacity:0;pointer-events:none;transition:opacity .2s;z-index:40}
+.scrim.on{opacity:1;pointer-events:auto}
+.panel{
+  position:fixed;top:0;right:0;height:100dvh;width:min(468px,100%);
+  background:var(--surface);border-left:1px solid var(--line);
+  transform:translateX(100%);transition:transform .26s cubic-bezier(.4,.0,.1,1);
+  z-index:50;display:flex;flex-direction:column;box-shadow:-30px 0 60px -30px rgba(0,0,0,.7);
+}
+.panel.on{transform:translateX(0)}
+.panel-top{padding:22px 24px 16px;border-bottom:1px solid var(--line-soft);position:relative}
+.panel-badge{font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;color:var(--accent,var(--core));display:inline-flex;align-items:center;gap:8px;margin-bottom:12px}
+.panel-badge .dot{background:var(--accent,var(--core))}
+.panel h2{font-family:var(--font-display);font-weight:600;font-size:23px;letter-spacing:-.01em;margin:0 0 6px}
+.panel .role{color:var(--ink-mid);font-size:14px;margin:0}
+.closeb{position:absolute;top:18px;right:18px;width:34px;height:34px;border-radius:9px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink-mid);cursor:pointer;font-size:18px;line-height:1;display:flex;align-items:center;justify-content:center}
+.closeb:hover{color:var(--ink);border-color:var(--line)}
+.closeb:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.panel-body{overflow-y:auto;padding:20px 24px 40px;flex:1}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin:16px 0 4px}
+.tag{font-family:var(--font-mono);font-size:11px;color:var(--ink-mid);background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:3px 8px}
+.sect{margin-top:22px}
+.sect h3{
+  font-family:var(--font-display);font-size:12px;font-weight:600;letter-spacing:.02em;
+  color:var(--ink-dim);margin:0 0 10px;display:flex;align-items:center;gap:9px;
+}
+.sect h3::before{content:"";width:14px;height:2px;background:var(--accent,var(--core));border-radius:2px}
+.sect p{margin:0;color:var(--ink);font-size:14.5px;line-height:1.62}
+.hows{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:11px}
+.hows li{position:relative;padding-left:20px;color:var(--ink-mid);font-size:14px;line-height:1.55}
+.hows li::before{content:"";position:absolute;left:0;top:9px;width:6px;height:6px;border-radius:2px;background:var(--accent,var(--core))}
+.hows li b{color:var(--ink);font-weight:600}
+.kv{display:flex;flex-direction:column;gap:8px}
+.kv .item{background:var(--surface-2);border:1px solid var(--line-soft);border-radius:9px;padding:11px 13px;font-size:13.5px;color:var(--ink-mid)}
+.kv .item b{color:var(--ink);font-weight:600;font-family:var(--font-display)}
+.evts{display:flex;flex-direction:column;gap:7px}
+.evt{display:flex;align-items:center;gap:10px;font-size:13px}
+.evt .dir{font-family:var(--font-mono);font-size:10.5px;padding:2px 7px;border-radius:6px;flex:0 0 auto}
+.evt .dir.emit{color:var(--pos);background:#3ddc9718;border:1px solid #3ddc9733}
+.evt .dir.consume{color:var(--edge);background:#b18bfa18;border:1px solid #b18bfa33}
+.evt code{font-family:var(--font-mono);font-size:12.5px;color:var(--bus)}
+.hint{margin-top:30px;font-size:12.5px;color:var(--ink-dim);text-align:center}
+
+footer{margin-top:36px;padding-top:20px;border-top:1px solid var(--line-soft);color:var(--ink-dim);font-size:12.5px}
+footer b{color:var(--ink-mid);font-weight:600}
+
+@media (max-width:720px){
+  .band{padding-left:16px;padding-top:44px}
+  .band-label{width:auto;right:0;bottom:auto;height:34px;border-right:0;border-bottom:1px solid var(--line-soft);justify-content:flex-start;padding-left:16px}
+  .band-label span{transform:none}
+  .band::before{top:44px}
+  .node{flex-basis:calc(50% - 6px)}
+  .node.bus-node{flex-direction:column;align-items:flex-start}
+  .node.bus-node .topics{margin-left:0}
+  .legend{margin-left:0;width:100%}
+  .panel{width:100%;height:88dvh;top:auto;bottom:0;border-left:0;border-top:1px solid var(--line);border-radius:18px 18px 0 0;transform:translateY(100%)}
+  .panel.on{transform:translateY(0)}
+}
+</style>
+</head>
+<body>
+
+<div class="ticker" aria-hidden="true">
+  <div class="ticker-track" id="tk"></div>
+</div>
+
+<div class="wrap">
+  <header>
+    <p class="kicker">system design · high-level design</p>
+    <h1>Stock Broker Trading Platform</h1>
+    <p class="lede">A retail brokerage sits <b>between the user and the exchange</b> — it never matches orders itself. Its job is auth, funds, risk, routing, market data and settlement around the exchange's matching engine. Pick a view, then <b>tap any block</b> to see what it does and how it works.</p>
+  </header>
+
+  <div class="toolbar">
+    <div class="seg" role="tablist" aria-label="View">
+      <button role="tab" aria-selected="true" id="tab-arch">Architecture</button>
+      <button role="tab" aria-selected="false" id="tab-flow">Order lifecycle</button>
+    </div>
+    <div class="legend" id="legend"></div>
+  </div>
+
+  <!-- ARCHITECTURE MAP -->
+  <div class="map" id="map"></div>
+
+  <!-- ORDER FLOW -->
+  <div class="flow" id="flow">
+    <div class="flow-head">
+      <p>Follow a single buy order from tap to settlement. The broker validates and risk-checks it, routes it to the exchange over <span style="font-family:var(--font-mono);color:var(--primary)">FIX</span>, then fans the result out through the event bus. Tap a step for detail.</p>
+      <button class="btn" id="play">Step through</button>
+      <button class="btn ghost" id="resetflow">Reset</button>
+    </div>
+    <ol class="steps" id="steps"></ol>
+  </div>
+
+  <footer>
+    <b>Scope.</b> This is an HLD — component responsibilities, data flow and mechanics, not line-level implementation. The money and order paths favour strong consistency (CP); market data and watchlists favour availability (AP). Reconciliation with the exchange closes the loop each day.
+  </footer>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="panel" id="panel" aria-hidden="true" aria-label="Component detail">
+  <div class="panel-top">
+    <button class="closeb" id="closeb" aria-label="Close detail">✕</button>
+    <div class="panel-badge" id="p-badge"></div>
+    <h2 id="p-name"></h2>
+    <p class="role" id="p-role"></p>
+  </div>
+  <div class="panel-body" id="p-body"></div>
+</aside>
+
+<script>
+/* ---------- tiny inline icons ---------- */
+const I = {
+  device:'<path d="M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M10 18h4"/>',
+  gate:'<path d="M4 7h16M4 12h16M4 17h16"/><circle cx="8" cy="7" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="10" cy="17" r="1.4"/>',
+  stream:'<path d="M4 8c5 0 5 8 10 8s5-8 6-8"/><path d="M4 16c3 0 4 2 6 2"/>',
+  lock:'<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
+  id:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="11" r="2.2"/><path d="M13 9h5M13 13h5M5 16h7"/>',
+  ledger:'<path d="M6 4h11a2 2 0 0 1 2 2v14H8a2 2 0 0 1-2-2V4Z"/><path d="M6 4a2 2 0 0 0-2 2v0a2 2 0 0 0 2 2"/><path d="M10 9h6M10 13h6"/>',
+  order:'<path d="M6 3h9l4 4v14H6Z"/><path d="M9 12l2 2 4-4"/>',
+  shield:'<path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6Z"/><path d="M9 12l2 2 4-4"/>',
+  plug:'<path d="M9 3v5M15 3v5"/><path d="M7 8h10v3a5 5 0 0 1-10 0Z"/><path d="M12 16v5"/>',
+  candles:'<path d="M6 4v4M6 16v4M6 8h0a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1"/><rect x="5" y="8" width="3" height="8" rx="1"/><rect x="11" y="5" width="3" height="10" rx="1"/><path d="M12.5 3v2M12.5 15v4"/><rect x="17" y="10" width="3" height="7" rx="1"/><path d="M18.5 6v4M18.5 17v2"/>',
+  wallet:'<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M16 12h3"/><path d="M3 9h14a2 2 0 0 1 2 2"/>',
+  bell:'<path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z"/><path d="M10 20a2 2 0 0 0 4 0"/>',
+  report:'<path d="M6 3h8l4 4v14H6Z"/><path d="M9 13v4M12 11v6M15 14v3"/>',
+  bus:'<path d="M3 12h4l2-4 3 8 2-4h7"/>',
+  db:'<ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/>',
+  redis:'<path d="M4 7l8-3 8 3-8 3Z"/><path d="M4 12l8 3 8-3M4 17l8 3 8-3"/>',
+  clock:'<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',
+  archive:'<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M10 13h4"/>',
+  exchange:'<path d="M4 8h13l-3-3M20 16H7l3 3"/>'
+};
+function svg(p){return '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>'}
+
+/* ---------- data ---------- */
+const layers = {
+  client:{name:'Client',color:'var(--client)'},
+  edge:{name:'Edge',color:'var(--edge)'},
+  core:{name:'Core services',color:'var(--core)'},
+  bus:{name:'Event backbone',color:'var(--bus)'},
+  data:{name:'Data stores',color:'var(--data)'},
+  external:{name:'Exchange',color:'var(--external)'}
+};
+
+const C = {
+  apps:{layer:'client',icon:'device',name:'Web & Mobile Apps',kind:'User entry point',
+    role:'Where the user places orders, watches live prices and checks their portfolio.',
+    tags:['REST/HTTPS','WebSocket','Idempotency key'],
+    what:'The retail user\'s window into the platform — native mobile and web clients that place and cancel orders, render live charts and order books, and show holdings with real-time P&L.',
+    how:['Two channels: <b>REST over HTTPS</b> for commands (place / cancel order, add funds) and a persistent <b>WebSocket</b> for streaming quotes and order-status pushes.','Generates a <b>client order ID (idempotency key)</b> per order so a network retry or a double-tap can never create two orders.','Does <b>optimistic UI</b> — shows the order as pending immediately, then reconciles against the authoritative status pushed from the server.','Caches watchlist and holdings locally for instant load; refreshes from the server on reconnect.'],
+    stores:[['Local cache','Watchlist, last-seen holdings, draft orders']]},
+
+  gateway:{layer:'edge',icon:'gate',name:'API Gateway',kind:'Request/response edge',
+    role:'The single guarded door for all non-streaming traffic.',
+    tags:['AuthN/Z','Rate limit','Routing','Tracing'],
+    what:'One entry point for every command and query. It authenticates, authorises, rate-limits, validates and routes requests to the right internal service — so those services never face the raw internet.',
+    how:['Terminates TLS and <b>verifies the JWT</b> locally using Auth\'s cached public key — no round trip on the hot path.','Enforces <b>per-user and per-endpoint rate limits</b> with a token bucket kept in Redis (protects against runaway clients and abuse at market open).','Injects a <b>correlation / trace ID</b> so one order can be followed across every downstream service.','Wraps calls in <b>circuit breakers</b> so a slow service sheds load instead of cascading.','Often a <b>BFF</b> (backend-for-frontend) per client type, shaping responses for web vs mobile.'],
+    scale:['Stateless and horizontally scaled behind a load balancer.','Rate-limit state is external (Redis) so any instance can serve any user.']},
+
+  wsgw:{layer:'edge',icon:'stream',name:'WebSocket Gateway',kind:'Streaming fan-out edge',
+    role:'Holds millions of live connections and pushes updates to them.',
+    tags:['Persistent conns','Pub/sub','Conflation'],
+    what:'Keeps a long-lived connection open to every active client and pushes live quotes and order/trade status the instant they change — kept separate from the order path so the quote firehose never contends with trading.',
+    how:['Maintains a <b>subscription registry</b> (connection → symbols) so a client only receives ticks for symbols on its watchlist or open charts.','Consumes normalised ticks from the market-data stream and <b>fans out per symbol</b>.','<b>Conflates</b> for slow consumers — if updates arrive faster than a client drains, intermediate ticks are dropped and only the latest is sent.','<b>Heartbeats</b> (ping/pong) detect dead connections; a shared store lets the fleet scale horizontally.'],
+    scale:['Sharded by connection; subscription state in a shared store (Redis) so instances are interchangeable.','Backpressure via conflation keeps memory bounded during volatile opens.']},
+
+  auth:{layer:'core',icon:'lock',name:'Auth Service',kind:'Identity & sessions',
+    role:'Proves who the user is and issues the tokens everything else trusts.',
+    tags:['JWT','2FA/TOTP','Refresh tokens'],
+    what:'Owns login, multi-factor auth, sessions and token issuance. Every other service trusts an identity because Auth vouched for it.',
+    how:['Passwords hashed with <b>bcrypt / argon2</b>; second factor via <b>TOTP or OTP</b>.','Issues short-lived <b>JWT access tokens</b> plus longer-lived <b>refresh tokens</b>; signs with a private key so the gateway can verify with the public key alone.','Keeps session / refresh state in <b>Redis</b>; supports device binding and remote revocation.'],
+    stores:[['Postgres','Credentials, MFA secrets, devices'],['Redis','Active sessions & refresh tokens']]},
+
+  kyc:{layer:'core',icon:'id',name:'User & KYC Service',kind:'Accounts & eligibility',
+    role:'Holds the account profile and what the user is allowed to trade.',
+    tags:['KYC/AML','Bank linkage','Segments'],
+    what:'The system of record for the account: profile, KYC/AML status, linked bank accounts and which market segments (equity, F&O) the user is permitted to trade.',
+    how:['Integrates with external <b>KYC / AML providers</b> and tracks verification state.','Exposes <b>trading permissions</b> that RMS and OMS consult before letting an order through.','Manages linked bank accounts used by the Funds service for deposits and withdrawals.'],
+    stores:[['Postgres','Profile, KYC state, permissions, bank links']]},
+
+  funds:{layer:'core',icon:'ledger',name:'Funds & Ledger',kind:'Source of truth for money',
+    role:'Every rupee in, out and blocked — accounted for exactly.',
+    tags:['Double-entry','ACID','Margin block'],
+    what:'The authoritative money service. Wallet balance, deposits, withdrawals, blocking funds for a pending order, and settling them once it fills. Correctness here is non-negotiable.',
+    how:['Runs a <b>double-entry ledger</b> — every movement is a balanced debit/credit pair, stored append-only so the full history is auditable.','Blocks funds when an order is placed, <b>settles</b> against the actual fill, and <b>releases</b> the remainder on cancel or partial fill.','Uses <b>DB transactions with row locking / optimistic concurrency</b> so two orders can never spend the same balance twice.','Every operation is <b>idempotent</b>, keyed by a transaction ID, so retries are safe.'],
+    stores:[['Postgres','Ledger entries, balances — strongly consistent']],
+    events:[['consume','order.placed'],['consume','order.executed'],['emit','funds.blocked'],['emit','trade.settled']]},
+
+  oms:{layer:'core',icon:'order',name:'Order Management (OMS)',kind:'The order\'s brain',
+    role:'Owns the full lifecycle of every order and its state machine.',
+    tags:['State machine','Idempotency','WAL'],
+    what:'The heart of the platform. It validates each order, drives it through a deterministic state machine, persists every transition, and coordinates the risk check and exchange routing.',
+    how:['Deterministic states: <b>PENDING → VALIDATED → SENT → OPEN → PARTIAL / FILLED / REJECTED / CANCELLED</b>.','<b>Persists every transition before acting</b> (write-ahead), so a crash recovers exactly where it left off — no order lost or duplicated.','Deduplicates on the <b>client order ID</b> via a unique constraint.','Maps internal order IDs to <b>exchange order IDs</b> to handle modify / cancel and match execution reports back.','Emits order events to the bus; reconciles its state against the exchange\'s execution reports.'],
+    stores:[['Postgres','Orders + full transition history, ACID']],
+    events:[['emit','order.placed'],['emit','order.executed'],['emit','order.cancelled']]},
+
+  rms:{layer:'core',icon:'shield',name:'Risk Management (RMS)',kind:'Pre-trade gate',
+    role:'The blocking checkpoint an order must clear before it leaves.',
+    tags:['Margin','Limits','Square-off'],
+    what:'A synchronous risk gate. Before any order reaches the exchange, RMS confirms the user can actually afford it and isn\'t breaching exposure or regulatory limits — then it keeps watching after the trade.',
+    how:['Runs a <b>synchronous, blocking check</b> on the order path: required margin vs available funds, position and exposure limits, banned scrips, price bands / circuit limits.','Computes margin — <b>cash for delivery, SPAN + exposure for derivatives</b>.','Keeps a <b>fast in-memory view</b> of positions and limits, refreshed from position events, because it sits on the latency-critical path.','Also runs <b>post-trade monitoring</b> — auto square-off when margin is breached intraday.'],
+    stores:[['In-memory + Postgres','Live limits & positions, periodically persisted']],
+    events:[['consume','trade.settled'],['consume','order.executed']]},
+
+  exgw:{layer:'core',icon:'plug',name:'Exchange Gateway',kind:'Bridge to the exchange',
+    role:'Speaks the exchange\'s protocol and never loses a message.',
+    tags:['FIX','Sequenced session','Failover'],
+    what:'Translates internal orders into the exchange\'s protocol, holds the live session to the exchange, and feeds execution reports back in. This is where your world meets the market.',
+    how:['Talks <b>FIX</b> (or the exchange\'s native binary API) over a stateful, <b>sequenced session</b> — sequence numbers, heartbeats, and gap-fill / resend on any disconnect.','Maps <b>internal order ID ↔ exchange order ID</b> in both directions.','Handles async <b>execution reports</b> — fills, partials, rejects, cancels — and pushes them to OMS.','Runs as an <b>active–passive pair</b> for failover; strict ordering, zero message loss.'],
+    scale:['A single logical session to the exchange demands careful HA — hot standby with seq-number continuity.']},
+
+  mkt:{layer:'core',icon:'candles',name:'Market Data Service',kind:'The quote firehose',
+    role:'Turns the raw exchange feed into quotes, depth and candles.',
+    tags:['UDP multicast','Normalise','OHLC'],
+    what:'Ingests the exchange\'s raw market feed, decodes and normalises it, builds the order book and candles, and publishes it for the whole platform. Read-heavy, massive fan-out, entirely off the order path.',
+    how:['Consumes the exchange feed — often <b>UDP multicast</b> at very high throughput.','Decodes the exchange\'s <b>binary format</b>, normalises symbols, builds top-of-book / depth, and computes <b>OHLC candles</b>.','Publishes latest tick to <b>Redis</b> (last-value cache) and the stream to <b>Kafka</b> for the WebSocket gateway to fan out.','Conflates aggressively for downstream consumers that can\'t keep up.'],
+    stores:[['Redis','Latest quote per symbol'],['Time-series DB','Historical ticks & candles']],
+    events:[['emit','marketdata.ticks']]},
+
+  portfolio:{layer:'core',icon:'wallet',name:'Portfolio & Positions',kind:'Holdings & P&L',
+    role:'What you own, at what price, and what it\'s worth now.',
+    tags:['Weighted avg','Realized/Unrealized','Event-sourced'],
+    what:'Maintains holdings, average cost, open positions and both realized and unrealized P&L — updated from trades and priced against the live market.',
+    how:['Consumes <b>order.executed / trade.settled</b> from the bus and updates holdings with a <b>weighted-average cost</b>.','Computes <b>unrealized P&L</b> by joining holdings against live quotes from Redis.','Stores positions in Postgres; caches the computed view in Redis for fast reads on portfolio load.'],
+    stores:[['Postgres','Holdings, positions, avg cost'],['Redis','Cached computed P&L']],
+    events:[['consume','order.executed'],['consume','trade.settled'],['consume','marketdata.ticks']]},
+
+  notif:{layer:'core',icon:'bell',name:'Notification Service',kind:'Alerts & pushes',
+    role:'Tells the user what just happened, across every channel.',
+    tags:['Multi-channel','Templating','Dedup'],
+    what:'Turns platform events into user-facing alerts — order filled, price target hit, margin call, statement ready — over push, SMS and email.',
+    how:['Consumes events from the bus and dispatches via <b>push / SMS / email</b> providers with templating.','Respects <b>user preferences</b> and <b>deduplicates</b> on event ID so a replayed event never double-notifies.'],
+    events:[['consume','order.executed'],['consume','trade.settled']]},
+
+  report:{layer:'core',icon:'report',name:'Reporting & Analytics',kind:'Statements & compliance',
+    role:'Contract notes, tax reports and the audit trail.',
+    tags:['Warehouse','Batch','Audit'],
+    what:'Produces contract notes, P&L statements, tax reports (short/long-term gains) and regulatory filings — and preserves the immutable audit trail.',
+    how:['Streams trade and ledger events into a <b>warehouse / columnar store</b> for analytics.','Runs <b>batch jobs</b> to generate documents and regulatory reports.','Keeps an <b>append-only audit log</b> in cold object storage for the mandated retention period.'],
+    stores:[['Warehouse','Analytical trade & ledger history'],['Object storage','Documents & audit archive']],
+    events:[['consume','order.executed'],['consume','trade.settled'],['consume','funds.blocked']]},
+
+  kafka:{layer:'bus',icon:'bus',name:'Kafka Event Backbone',kind:'Async, durable spine',
+    role:'Decouples producers from consumers and lets events be replayed.',
+    tags:['Topics','Partitions','Consumer groups','Replay'],
+    what:'The durable event bus every service publishes to and reads from. It decouples the order path from portfolio, notifications, ledger settlement and analytics — so each evolves and scales independently.',
+    how:['Topics like <code style="font-family:var(--font-mono);color:var(--bus)">order.placed</code>, <code style="font-family:var(--font-mono);color:var(--bus)">order.executed</code>, <code style="font-family:var(--font-mono);color:var(--bus)">trade.settled</code>, <code style="font-family:var(--font-mono);color:var(--bus)">funds.blocked</code>.','<b>Partitioned</b> (by user or symbol) for parallelism <b>with ordering guaranteed within a key</b>.','Each consumer is an independent <b>consumer group</b> — a new consumer can be added without touching producers.','<b>Durable and replayable</b>, which is what makes reconciliation, rebuilds and back-fills possible.'],
+    scale:['Adding a consumer never slows producers.','Replay lets you rebuild a downstream store from history after a bug.']},
+
+  postgres:{layer:'data',icon:'db',name:'Relational Store',kind:'Orders · ledger · portfolio',
+    role:'ACID home for anything that must be exactly right.',
+    tags:['ACID','Sharded','Replicas'],
+    what:'The strongly consistent store for orders, the ledger, portfolio and users — everything where a lost or duplicated write is a real financial error.',
+    how:['<b>ACID transactions and constraints</b> — e.g. a unique client-order-ID constraint enforces idempotency at the database.','<b>Sharded by user</b> for write scale; <b>read replicas</b> serve heavy read traffic.','<b>MVCC / row-level locking</b> keeps concurrent funds updates correct.'],
+    stores:[['Chosen for','Correctness over raw throughput on money & orders']]},
+
+  redis:{layer:'data',icon:'redis',name:'In-Memory Cache',kind:'Quotes · sessions · limits',
+    role:'Sub-millisecond reads for hot, ephemeral data.',
+    tags:['Last-value','TTL','Token bucket'],
+    what:'The fast tier: latest quote per symbol, sessions, watchlists, computed positions and rate-limit counters — anything that needs to be read in under a millisecond.',
+    how:['Serves the <b>last-value cache</b> for ticks and the token buckets behind rate limiting.','TTLs and pub/sub back sessions and short-lived state; loss is tolerable because the source of truth lives elsewhere.'],
+    stores:[['Chosen for','Speed & availability over durability']]},
+
+  tsdb:{layer:'data',icon:'clock',name:'Time-Series Store',kind:'Historical charts',
+    role:'Years of ticks and candles for charting.',
+    tags:['Columnar','Downsampled','High ingest'],
+    what:'Stores historical market data — raw ticks plus downsampled candles — so the client can render minute, hourly and daily charts quickly.',
+    how:['<b>Time-partitioned / columnar</b> for high write ingest and fast range scans.','Keeps <b>downsampled candles</b> (1m / 5m / 1d) alongside raw ticks so charts don\'t recompute on every load.']},
+
+  object:{layer:'data',icon:'archive',name:'Object Storage',kind:'Audit & documents',
+    role:'Cheap, immutable, long-retention storage.',
+    tags:['Append-only','Cold','Retention'],
+    what:'Cold, durable storage for contract notes, statements and the compliance audit archive that must be retained for years.',
+    how:['<b>Append-only</b> objects; lifecycle rules move them to colder tiers over time.','The immutable landing zone for the audit trail sourced from the event bus.']},
+
+  exchange:{layer:'external',icon:'exchange',name:'Exchange — Matching Engine',kind:'External · not the broker',
+    role:'The real order book. This is what actually matches trades.',
+    tags:['Price-time priority','FIX','EOD files'],
+    what:'The stock exchange (NSE/BSE, NYSE) — a separate entity that owns the order book and matches buyers with sellers. The broker connects to it but does not control it. Understanding this boundary is the whole design.',
+    how:['Matches orders by <b>price-time priority</b> in its own matching engine.','Accepts orders and returns <b>execution reports</b> over FIX to the broker\'s Exchange Gateway.','Publishes the <b>market-data feed</b> the broker ingests, and end-of-day <b>trade files</b> the broker reconciles against.'],
+    scale:['Treated as an external dependency with strict SLAs — circuit breakers and reconciliation protect the broker when it misbehaves.']}
+};
+
+const bands = [
+  {layer:'client', ids:['apps']},
+  {layer:'edge', ids:['gateway','wsgw']},
+  {layer:'core', ids:['auth','kyc','funds','oms','rms','exgw','mkt','portfolio','notif','report']},
+  {layer:'bus', ids:['kafka']},
+  {layer:'data', ids:['postgres','redis','tsdb','object']},
+  {layer:'external', ids:['exchange']}
+];
+
+/* order lifecycle */
+const STEPS = [
+  {nm:'User places a buy order', actor:'Apps → API Gateway', comp:'apps',
+   desc:'The app sends the order over HTTPS with a client-generated idempotency key.',
+   detail:{role:'Tap enters the system.',
+     what:'The client submits a buy order (symbol, qty, price, type) to the gateway and shows it as pending immediately.',
+     how:['Carries a <b>client order ID</b> so retries can\'t duplicate the order.','Gateway authenticates the JWT, rate-limits, and routes to the OMS.','A trace ID is attached to follow the order end-to-end.']}},
+  {nm:'Validate & persist', actor:'OMS', comp:'oms',
+   desc:'OMS assigns an order ID, writes it as PENDING, and dedupes on the client order ID.',
+   detail:{role:'The order becomes durable before anything else happens.',
+     what:'OMS validates the fields, records the order in state PENDING, and guarantees it exists exactly once.',
+     how:['<b>Write-ahead</b>: the order is persisted before any downstream call, so a crash is recoverable.','Unique constraint on the client order ID rejects duplicates.','State moves PENDING → VALIDATED.']}},
+  {nm:'Risk check + block funds', actor:'RMS + Funds', comp:'rms',
+   desc:'RMS confirms margin and limits; the ledger blocks the required funds. Fail → REJECTED.',
+   detail:{role:'The blocking gate.',
+     what:'RMS checks affordability and limits synchronously; the Funds service blocks the money so it can\'t be spent twice.',
+     how:['Required margin vs available balance, exposure and circuit limits are all checked.','On pass, <b>funds.blocked</b> is recorded in the double-entry ledger.','On fail, the order goes to <b>REJECTED</b> and the user is told why.']}},
+  {nm:'Route to the exchange', actor:'Exchange Gateway', comp:'exgw',
+   desc:'The order is translated to FIX and sent to the exchange over the live session.',
+   detail:{role:'Your world meets the market.',
+     what:'The Exchange Gateway sends the order to the exchange and marks it SENT / OPEN.',
+     how:['Serialised to <b>FIX</b> on a sequenced session with heartbeats and resend-on-gap.','Internal order ID is mapped to the returned exchange order ID.']}},
+  {nm:'Exchange matches the order', actor:'Matching engine', comp:'exchange',
+   desc:'The exchange matches against its order book by price-time priority — the broker never does this.',
+   detail:{role:'The actual trade happens here — outside the broker.',
+     what:'The exchange matches the order fully, partially, or not yet, and generates an execution report.',
+     how:['Matching is <b>price-time priority</b> in the exchange\'s engine.','A fill, partial fill, or reject is returned to the broker.']}},
+  {nm:'Execution report returns', actor:'Exchange Gateway → OMS', comp:'exgw',
+   desc:'Fills flow back; OMS moves the order to PARTIAL or FILLED.',
+   detail:{role:'The result comes home.',
+     what:'The gateway receives the async execution report and updates the OMS state machine.',
+     how:['OMS transitions to <b>PARTIAL</b> or <b>FILLED</b> and persists it.','It emits <b>order.executed</b> to the event bus.']}},
+  {nm:'Fan out on the bus', actor:'Kafka', comp:'kafka',
+   desc:'order.executed is published once and consumed independently by several services.',
+   detail:{role:'One event, many independent reactions.',
+     what:'The execution is broadcast durably so ledger, portfolio, notifications and analytics each act on it.',
+     how:['Partitioned by user/symbol for ordered, parallel processing.','Durable and replayable — the basis for later reconciliation.']}},
+  {nm:'Settle funds & update portfolio', actor:'Funds + Portfolio', comp:'portfolio',
+   desc:'The ledger settles the blocked amount against the fill; holdings and average cost update.',
+   detail:{role:'Money and holdings become consistent.',
+     what:'The blocked funds are settled against the actual fill price and quantity; the portfolio recomputes holdings and P&L.',
+     how:['Ledger releases any unfilled remainder and books the trade.','Portfolio updates <b>weighted-average cost</b> and emits <b>trade.settled</b>.']}},
+  {nm:'Notify & stream to the user', actor:'Notification + WS Gateway', comp:'notif',
+   desc:'A push alert fires and the order status streams live to the user\'s screen.',
+   detail:{role:'The user sees it, instantly.',
+     what:'The notification service sends the alert; the WebSocket gateway pushes the status change to the open app.',
+     how:['Multi-channel dispatch, deduplicated on event ID.','WS gateway pushes the update only to that user\'s connection.']}},
+  {nm:'End-of-day reconciliation', actor:'Reporting', comp:'report',
+   desc:'The broker reconciles its records against the exchange\'s trade file and generates the contract note.',
+   detail:{role:'The loop closes.',
+     what:'Every trade is reconciled against the exchange\'s official EOD file; discrepancies are flagged; documents are generated.',
+     how:['Replayable events make a full audit reconstruction possible.','Contract notes and statements are written to the archive.']}}
+];
+
+/* ---------- render legend ---------- */
+document.getElementById('legend').innerHTML =
+  Object.entries(layers).map(([k,v])=>`<span><i class="dot" style="background:${v.color}"></i>${v.name}</span>`).join('');
+
+/* ---------- render map ---------- */
+const map = document.getElementById('map');
+map.innerHTML = bands.map((b,bi)=>{
+  const inner = b.ids.map(id=>{
+    const c = C[id];
+    if(id==='kafka'){
+      return `<button class="node wide bus-node" data-id="${id}">
+        ${svg(I[c.icon])}
+        <div class="txt"><span class="nm">${c.name}</span><span class="kd">${c.kind}</span></div>
+        <div class="topics">
+          <span class="topic">order.executed</span><span class="topic">trade.settled</span><span class="topic">funds.blocked</span><span class="topic">marketdata.ticks</span>
+        </div>
+      </button>`;
+    }
+    return `<button class="node" data-id="${id}">
+      ${svg(I[c.icon])}
+      <span class="nm">${c.name}</span>
+      <span class="kd">${c.kind}</span>
+    </button>`;
+  }).join('');
+  const cue = bi<bands.length-1 ? `<div class="flowcue">▼</div>` : '';
+  return `<div class="band" data-layer="${b.layer}">
+      <div class="band-label"><span>${layers[b.layer].name}</span></div>
+      <div class="row">${inner}</div>
+    </div>${cue}`;
+}).join('');
+
+/* ---------- render steps ---------- */
+const stepsEl = document.getElementById('steps');
+stepsEl.innerHTML = STEPS.map((s,i)=>`
+  <li class="step" data-step="${i}" tabindex="0" role="button" aria-label="Step ${i+1}: ${s.nm}">
+    <span class="num">${i+1}</span>
+    <div class="st-nm">${s.nm} <span class="actor">${s.actor}</span></div>
+    <div class="st-desc">${s.desc}</div>
+  </li>`).join('');
+
+/* ---------- panel ---------- */
+const panel=document.getElementById('panel'), scrim=document.getElementById('scrim');
+let activeNode=null;
+function esc(){return}
+function openComponent(id, fromStep){
+  const c=C[id]; if(!c) return;
+  panel.style.setProperty('--accent', layers[c.layer].color);
+  document.getElementById('p-badge').innerHTML=`<i class="dot"></i>${layers[c.layer].name} · ${c.kind}`;
+  document.getElementById('p-name').textContent=c.name;
+  document.getElementById('p-role').textContent = fromStep ? fromStep.role : c.role;
+  let html='';
+  if(c.tags) html+=`<div class="tags">${c.tags.map(t=>`<span class="tag">${t}</span>`).join('')}</div>`;
+  const whatTxt = fromStep ? fromStep.what : c.what;
+  html+=`<div class="sect"><h3>What it does</h3><p>${whatTxt}</p></div>`;
+  const howArr = fromStep ? fromStep.how : c.how;
+  html+=`<div class="sect"><h3>How it works</h3><ul class="hows">${howArr.map(h=>`<li>${h}</li>`).join('')}</ul></div>`;
+  if(!fromStep && c.stores) html+=`<div class="sect"><h3>Data it owns</h3><div class="kv">${c.stores.map(s=>`<div class="item"><b>${s[0]}</b> — ${s[1]}</div>`).join('')}</div></div>`;
+  if(!fromStep && c.scale) html+=`<div class="sect"><h3>Scale & failure</h3><ul class="hows">${c.scale.map(h=>`<li>${h}</li>`).join('')}</ul></div>`;
+  if(!fromStep && c.events) html+=`<div class="sect"><h3>Events</h3><div class="evts">${c.events.map(e=>`<div class="evt"><span class="dir ${e[0]==='emit'?'emit':'consume'}">${e[0]==='emit'?'emits':'consumes'}</span><code>${e[1]}</code></div>`).join('')}</div></div>`;
+  html+=`<p class="hint">Every block is part of one system — close this and explore how they connect.</p>`;
+  document.getElementById('p-body').innerHTML=html;
+  panel.classList.add('on'); panel.setAttribute('aria-hidden','false'); scrim.classList.add('on');
+}
+function closePanel(){
+  panel.classList.remove('on'); panel.setAttribute('aria-hidden','true'); scrim.classList.remove('on');
+  if(activeNode){activeNode.classList.remove('active');activeNode=null;}
+}
+document.getElementById('closeb').onclick=closePanel;
+scrim.onclick=closePanel;
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closePanel();});
+
+map.addEventListener('click',e=>{
+  const n=e.target.closest('.node'); if(!n)return;
+  if(activeNode)activeNode.classList.remove('active');
+  n.classList.add('active'); activeNode=n;
+  openComponent(n.dataset.id);
+});
+
+/* ---------- steps interaction ---------- */
+let curStep=-1;
+function selectStep(i){
+  document.querySelectorAll('.step').forEach(s=>s.classList.remove('active'));
+  const el=document.querySelector(`.step[data-step="${i}"]`);
+  if(el)el.classList.add('active');
+  curStep=i;
+  const s=STEPS[i];
+  openComponent(s.comp, s.detail);
+}
+stepsEl.addEventListener('click',e=>{const li=e.target.closest('.step');if(li)selectStep(+li.dataset.step);});
+stepsEl.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.classList.contains('step')){e.preventDefault();selectStep(+e.target.dataset.step);}});
+document.getElementById('play').onclick=()=>{selectStep((curStep+1)%STEPS.length);
+  const el=document.querySelector(`.step[data-step="${curStep}"]`); if(el)el.scrollIntoView({behavior:'smooth',block:'center'});};
+document.getElementById('resetflow').onclick=()=>{document.querySelectorAll('.step').forEach(s=>s.classList.remove('active'));curStep=-1;closePanel();};
+
+/* ---------- view switch ---------- */
+const tabA=document.getElementById('tab-arch'), tabF=document.getElementById('tab-flow');
+const flow=document.getElementById('flow');
+function setView(v){
+  const arch=v==='arch';
+  tabA.setAttribute('aria-selected',arch); tabF.setAttribute('aria-selected',!arch);
+  map.classList.toggle('off',!arch); flow.classList.toggle('on',!arch);
+  closePanel();
+}
+tabA.onclick=()=>setView('arch'); tabF.onclick=()=>setView('flow');
+
+/* ---------- ticker ---------- */
+const syms=[['RELIANCE','2,948.30',1],['TCS','4,102.15',1],['HDFCBANK','1,678.90',-1],['INFY','1,845.60',1],['ICICIBANK','1,244.05',-1],['SBIN','842.75',1],['NIFTY 50','24,318.20',1],['ITC','486.40',-1],['LT','3,610.00',1],['BHARTIARTL','1,556.85',1],['AXISBANK','1,178.30',-1],['WIPRO','562.10',1]];
+function tkhtml(){return syms.map(s=>`<span class="tk"><span class="sym">${s[0]}</span><span class="px">${s[1]}</span><span class="${s[2]>0?'up':'dn'}">${s[2]>0?'▲':'▼'}${(Math.random()*1.4+0.1).toFixed(2)}%</span></span>`).join('');}
+document.getElementById('tk').innerHTML=tkhtml()+tkhtml();
+</script>
+</body>
+</html>

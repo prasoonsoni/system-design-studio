@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Stock Broker Trading Platform — System Design Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script>
+(function(){var t=null;try{t=localStorage.getItem('sdg-theme')}catch(e){}
+if(t==='light'||t==='dark')document.documentElement.dataset.theme=t;})();
+</script>
+<style>
+:root{
+  color-scheme:light;
+  --bg:#f6f8fc; --bg2:#eef2f8; --surface:#ffffff; --surface-2:#eef2f8; --surface-3:#e3e9f2;
+  --line:#d3dbe8; --line-soft:#e1e7f0;
+  --ink:#0f1729; --ink-mid:#45536b; --ink-dim:#5f6c85;
+  --primary:#0b7287; --violet:#6d45c9; --amber:#a35a00; --green:#0f7a4f; --red:#b42a2a; --blue:#2557c7;
+  --on-primary:#ffffff;
+  --code-bg:#f8fafd; --code-head:#eef2f8; --code-line:#dfe5ee; --code-ink:#24324a; --code-com:#5f6c85;
+  --code-key:#1f5fbf; --code-type:#a35a00; --code-str:#0f7a4f; --code-prop:#6d45c9; --code-num:#45536b; --code-inline:#0b4f5f;
+  --hero-a:#0f1729; --hero-b:#2c5a8a; --glow-1:#e2ecfb; --glow-2:#e6f2f5; --card-end:#f9fbfe; --fig-bg:#fbfcfe;
+  --scrim:rgba(15,23,41,.35); --shadow:#8c9ab3;
+  --svc:#0b7287; --svc-bg:#e3f3f7; --bus:#a35a00; --bus-bg:#fdf0dd;
+  --ext:#b4234a; --ext-bg:#fde7ec; --store:#55627a; --store-bg:#eef1f6;
+  --fd:"Space Grotesk",-apple-system,BlinkMacSystemFont,sans-serif;
+  --fb:"Inter",-apple-system,BlinkMacSystemFont,sans-serif;
+  --fm:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+  color-scheme:dark;
+  --bg:#0a0e17; --bg2:#0d1220; --surface:#141b2c; --surface-2:#1a2336; --surface-3:#202a42;
+  --line:#28324e; --line-soft:#1d2740;
+  --ink:#eaf0fb; --ink-mid:#aab6d2; --ink-dim:#7a86a4;
+  --primary:#5ec7df; --violet:#b995fb; --amber:#f3ab54; --green:#41e0a0; --red:#f5776f; --blue:#6ea8fe;
+  --on-primary:#04121a;
+  --code-bg:#0c1220; --code-head:#0e1526; --code-line:#1b2740; --code-ink:#c6d3e8; --code-com:#7383a3;
+  --code-key:#7fc7ff; --code-type:#f3ab54; --code-str:#7fe0b0; --code-prop:#b995fb; --code-num:#9fb0cf; --code-inline:#cfe6ee;
+  --hero-a:#f4f8ff; --hero-b:#a8c2e8; --glow-1:#17223d; --glow-2:#141d33; --card-end:#111827; --fig-bg:#0b1120;
+  --scrim:rgba(4,7,14,.6); --shadow:#000000;
+  --svc:#4fd0e0; --svc-bg:#152036; --bus:#f3ab54; --bus-bg:#241d12;
+  --ext:#fb7f95; --ext-bg:#2a1622; --store:#93a3c0; --store-bg:#131b2c;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0a0e17; --bg2:#0d1220; --surface:#141b2c; --surface-2:#1a2336; --surface-3:#202a42;
+  --line:#28324e; --line-soft:#1d2740;
+  --ink:#eaf0fb; --ink-mid:#aab6d2; --ink-dim:#7a86a4;
+  --primary:#5ec7df; --violet:#b995fb; --amber:#f3ab54; --green:#41e0a0; --red:#f5776f; --blue:#6ea8fe;
+  --on-primary:#04121a;
+  --code-bg:#0c1220; --code-head:#0e1526; --code-line:#1b2740; --code-ink:#c6d3e8; --code-com:#7383a3;
+  --code-key:#7fc7ff; --code-type:#f3ab54; --code-str:#7fe0b0; --code-prop:#b995fb; --code-num:#9fb0cf; --code-inline:#cfe6ee;
+  --hero-a:#f4f8ff; --hero-b:#a8c2e8; --glow-1:#17223d; --glow-2:#141d33; --card-end:#111827; --fig-bg:#0b1120;
+  --scrim:rgba(4,7,14,.6); --shadow:#000000;
+  --svc:#4fd0e0; --svc-bg:#152036; --bus:#f3ab54; --bus-bg:#241d12;
+  --ext:#fb7f95; --ext-bg:#2a1622; --store:#93a3c0; --store-bg:#131b2c;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:24px}
+body{margin:0;background:
+   radial-gradient(900px 460px at 84% -8%,var(--glow-1) 0,transparent 60%),
+   radial-gradient(760px 400px at 2% 2%,var(--glow-2) 0,transparent 55%),var(--bg);
+  color:var(--ink);font-family:var(--fb);font-size:15.5px;line-height:1.68;-webkit-font-smoothing:antialiased;
+  padding-top:env(safe-area-inset-top,0);}
+
+.top{max-width:1200px;margin:0 auto;padding:44px 24px 8px}
+.eyebrow{font-family:var(--fm);font-size:12px;color:var(--primary);letter-spacing:.05em;margin:0 0 13px}
+h1{font-family:var(--fd);font-weight:600;font-size:clamp(28px,4.4vw,44px);letter-spacing:-.02em;line-height:1.05;margin:0 0 14px;
+  background:linear-gradient(96deg,var(--hero-a) 22%,var(--hero-b) 92%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{color:var(--ink-mid);max-width:74ch;margin:0 0 22px;font-size:16px}
+.sub b{color:var(--ink);font-weight:600}
+.tldr{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:20px 0 6px}
+.tldr .card{background:linear-gradient(180deg,var(--surface),var(--card-end));border:1px solid var(--line-soft);border-radius:13px;padding:13px 15px}
+.tldr .k{font-family:var(--fm);font-size:11px;color:var(--ink-dim);letter-spacing:.04em;margin-bottom:5px}
+.tldr .v{font-family:var(--fd);font-weight:600;font-size:15px;color:var(--ink);line-height:1.3}
+.tldr .v span{color:var(--primary)}
+
+.layout{max-width:1200px;margin:16px auto 0;padding:0 24px 90px;display:grid;grid-template-columns:236px 1fr;gap:42px;align-items:start}
+.toc{position:sticky;top:18px;max-height:calc(100dvh - 36px);overflow:auto;padding:6px 4px 20px}
+.toc .th{font-family:var(--fm);font-size:11px;letter-spacing:.12em;color:var(--ink-dim);margin:0 0 12px;padding-left:12px}
+.toc a{display:block;color:var(--ink-dim);text-decoration:none;font-size:13.5px;padding:6px 12px;border-left:2px solid transparent;border-radius:0 7px 7px 0;transition:.14s;line-height:1.35}
+.toc a:hover{color:var(--ink);background:var(--surface)}
+.toc a.active{color:var(--primary);border-left-color:var(--primary);background:linear-gradient(90deg,color-mix(in srgb,var(--primary) 9%,transparent),transparent)}
+.toc a .n{font-family:var(--fm);font-size:11px;color:var(--ink-dim);margin-right:8px}
+.toc a.active .n{color:var(--primary)}
+
+main{min-width:0}
+section{margin:0 0 52px;scroll-margin-top:20px}
+section>h2{font-family:var(--fd);font-weight:600;font-size:25px;letter-spacing:-.01em;margin:0 0 4px;display:flex;align-items:baseline;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--line-soft)}
+section>h2 .sn{font-family:var(--fm);font-size:14px;color:var(--primary);font-weight:500}
+h3{font-family:var(--fd);font-weight:600;font-size:17.5px;letter-spacing:-.01em;margin:30px 0 10px;color:var(--ink)}
+h4{font-family:var(--fd);font-weight:600;font-size:14px;margin:22px 0 8px;color:var(--ink-mid)}
+p{margin:12px 0;color:var(--ink-mid)}
+p b,li b{color:var(--ink);font-weight:600}
+a.inline{color:var(--primary);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--primary) 30%,transparent)}
+ul,ol{margin:12px 0;padding-left:22px;color:var(--ink-mid)}
+li{margin:7px 0}
+code{font-family:var(--fm);font-size:.86em;background:var(--surface-2);border:1px solid var(--line-soft);border-radius:5px;padding:1px 6px;color:var(--code-inline)}
+strong.term{color:var(--ink);font-weight:600}
+
+/* callouts */
+.callout{border-radius:12px;padding:14px 16px 14px 18px;margin:18px 0;border:1px solid var(--line);position:relative;background:var(--surface);font-size:14.5px}
+.callout::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:3px;background:var(--ac)}
+.callout .ct{font-family:var(--fd);font-weight:600;font-size:12.5px;color:var(--ac);margin:0 0 5px;letter-spacing:.02em}
+.callout p{margin:4px 0;color:var(--ink-mid)}
+.callout.key{--ac:var(--green)} .callout.warn{--ac:var(--amber)} .callout.info{--ac:var(--primary)} .callout.note{--ac:var(--violet)}
+
+/* tables */
+.tw{overflow-x:auto;margin:16px 0;border:1px solid var(--line-soft);border-radius:12px}
+table{border-collapse:collapse;width:100%;font-size:13.7px;min-width:520px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+th{font-family:var(--fd);font-weight:600;font-size:12px;color:var(--ink-dim);letter-spacing:.03em;background:var(--surface-2);position:sticky;top:0}
+td{color:var(--ink-mid)}
+td b{color:var(--ink)}
+tr:last-child td{border-bottom:0}
+td .pill{font-family:var(--fm);font-size:11px;padding:2px 7px;border-radius:5px;background:var(--surface-3);color:var(--ink-mid);white-space:nowrap}
+.pill.cp{color:var(--primary);background:color-mix(in srgb,var(--primary) 11%,transparent)} .pill.ap{color:var(--amber);background:color-mix(in srgb,var(--amber) 11%,transparent)}
+.pill.get{color:var(--green);background:color-mix(in srgb,var(--green) 11%,transparent)} .pill.post{color:var(--blue);background:color-mix(in srgb,var(--blue) 11%,transparent)}
+.pill.put{color:var(--amber);background:color-mix(in srgb,var(--amber) 11%,transparent)} .pill.del{color:var(--red);background:color-mix(in srgb,var(--red) 11%,transparent)}
+
+/* code */
+.code{margin:16px 0;border:1px solid var(--code-line);border-radius:12px;overflow:hidden;background:var(--code-bg)}
+.code .ch{display:flex;align-items:center;gap:9px;padding:9px 14px;border-bottom:1px solid var(--code-line);background:var(--code-head)}
+.code .ch .dot{width:9px;height:9px;border-radius:50%}
+.code .ch .lang{font-family:var(--fm);font-size:11px;color:var(--ink-dim);margin-left:4px;letter-spacing:.03em}
+.code pre{margin:0;padding:15px 16px;overflow-x:auto;font-family:var(--fm);font-size:12.7px;line-height:1.62;color:var(--code-ink)}
+.code pre .c{color:var(--code-com);font-style:italic}
+.code pre .k{color:var(--code-key)}
+.code pre .t{color:var(--code-type)}
+.code pre .s{color:var(--code-str)}
+.code pre .p{color:var(--code-prop)}
+.code pre .m{color:var(--code-num)}
+
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:860px){.two{grid-template-columns:1fr}}
+
+footer{max-width:1200px;margin:0 auto;padding:24px;color:var(--ink-dim);font-size:13px;border-top:1px solid var(--line-soft)}
+footer b{color:var(--ink-mid)}
+
+.tocbtn{display:none}
+@media (max-width:900px){
+  .layout{grid-template-columns:1fr;gap:0}
+  .toc{position:fixed;left:0;top:0;height:100dvh;width:270px;background:var(--bg2);border-right:1px solid var(--line);z-index:60;transform:translateX(-100%);transition:transform .24s;padding:56px 10px 20px;max-height:none}
+  .toc.open{transform:translateX(0)}
+  .tocbtn{display:inline-flex;align-items:center;gap:8px;position:fixed;left:14px;bottom:calc(16px + env(safe-area-inset-bottom,0));z-index:61;background:var(--primary);color:var(--on-primary);border:0;border-radius:24px;padding:11px 17px;font-family:var(--fd);font-weight:600;font-size:13.5px;cursor:pointer;box-shadow:0 10px 26px -10px var(--shadow)}
+  .scrim{position:fixed;inset:0;background:var(--scrim);opacity:0;pointer-events:none;transition:.2s;z-index:59}
+  .scrim.on{opacity:1;pointer-events:auto}
+  .two{grid-template-columns:1fr}
+}
+
+.fig{margin:18px 0;border:1px solid var(--line-soft);border-radius:14px;background:var(--fig-bg);padding:16px 14px;overflow-x:auto}
+.fig pre.mermaid{margin:0;background:transparent;border:0;padding:0;text-align:center;white-space:pre}
+.fig pre.mermaid svg{max-width:100%;height:auto;display:block;margin:0 auto}
+.figcap{margin:12px 6px 0;font-size:12.5px;color:var(--ink-dim);text-align:center;line-height:1.5}
+.notation{display:flex;flex-wrap:wrap;gap:8px 18px;justify-content:center;margin-top:14px;font-size:12.5px;color:var(--ink-mid)}
+.notation span{display:inline-flex;align-items:center;gap:7px}
+.notation .g{font-family:var(--fm);color:var(--primary);font-size:13px}
+.top{position:relative}
+.theme-toggle{position:absolute;top:40px;right:24px;font-family:var(--fd);font-weight:500;font-size:13px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:7px 14px;cursor:pointer}
+.theme-toggle:hover{border-color:var(--primary)}
+.theme-toggle:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+@media (max-width:600px){.theme-toggle{top:16px;right:16px}.top{padding-top:60px}}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <button class="theme-toggle" id="themeToggle" aria-label="Switch colour theme"></button>
+  <p class="eyebrow">system design guide · v1</p>
+  <h1>Stock Broker Trading Platform</h1>
+  <p class="sub">An end-to-end design for a retail brokerage that lets users trade equities and derivatives on an exchange — covering requirements, capacity, architecture, <b>schema design</b>, <b>API design</b>, and the reliability, scaling and compliance concerns that make this domain hard. The governing idea: <b>the broker is not the exchange</b>. Matching happens at the exchange; the broker does auth, funds, risk, routing, market-data distribution and settlement around it.</p>
+  <div class="tldr">
+    <div class="card"><div class="k">SCALE TARGET</div><div class="v"><span>~20K</span> orders/sec peak</div></div>
+    <div class="card"><div class="k">CONNECTIONS</div><div class="v"><span>200K+</span> live WS clients</div></div>
+    <div class="card"><div class="k">ORDER PATH</div><div class="v">Strong consistency <span>(CP)</span></div></div>
+    <div class="card"><div class="k">DATA PATH</div><div class="v">Availability <span>(AP)</span></div></div>
+  </div>
+</div>
+
+<div class="layout">
+  <nav class="toc" id="toc">
+    <p class="th">CONTENTS</p>
+    <a href="#overview"><span class="n">01</span>Overview</a>
+    <a href="#requirements"><span class="n">02</span>Requirements</a>
+    <a href="#capacity"><span class="n">03</span>Capacity Estimation</a>
+    <a href="#architecture"><span class="n">04</span>Architecture</a>
+    <a href="#components"><span class="n">05</span>Component Deep-Dives</a>
+    <a href="#lifecycle"><span class="n">06</span>Order Lifecycle</a>
+    <a href="#schema"><span class="n">07</span>Data Model &amp; Schema</a>
+    <a href="#api"><span class="n">08</span>API Design</a>
+    <a href="#reliability"><span class="n">09</span>Consistency &amp; Reliability</a>
+    <a href="#scaling"><span class="n">10</span>Scaling &amp; Performance</a>
+    <a href="#security"><span class="n">11</span>Security &amp; Compliance</a>
+    <a href="#observability"><span class="n">12</span>Observability</a>
+    <a href="#tradeoffs"><span class="n">13</span>Trade-offs</a>
+  </nav>
+
+  <main>
+    <!-- 01 -->
+    <section id="overview">
+      <h2><span class="sn">01</span>Overview</h2>
+      <p>A brokerage platform is an intermediary between retail users and one or more <strong class="term">exchanges</strong> (NSE/BSE, NYSE/NASDAQ). Users deposit money, place orders, and hold positions; the platform validates and risk-checks each order, routes it to the exchange, tracks its outcome, and keeps the user's money and holdings correct.</p>
+      <div class="callout key"><p class="ct">The one idea to anchor everything</p><p>The broker never matches buy and sell orders — that is the exchange's <strong class="term">matching engine</strong>, using price-time priority. The broker's surface area is everything <em>around</em> matching: identity, funds, risk, order management, exchange connectivity, market-data fan-out, portfolio, and post-trade settlement &amp; reconciliation.</p></div>
+      <h4>In scope</h4>
+      <ul>
+        <li>Equity delivery + intraday, and F&amp;O (futures &amp; options) trading.</li>
+        <li>Order management, real-time market data, portfolio &amp; P&amp;L, funds, statements.</li>
+        <li>Regulatory audit, reconciliation, and surveillance hooks.</li>
+      </ul>
+      <h4>Out of scope (assumptions)</h4>
+      <ul>
+        <li>We do <em>not</em> build a matching engine — we integrate with the exchange over FIX.</li>
+        <li>Payment-gateway internals, KYC-provider internals, and mutual-fund/IPO flows are treated as external integrations.</li>
+      </ul>
+    </section>
+
+    <!-- 02 -->
+    <section id="requirements">
+      <h2><span class="sn">02</span>Requirements</h2>
+      <h3>Functional requirements</h3>
+      <div class="tw"><table>
+        <tr><th>Domain</th><th>Capabilities</th></tr>
+        <tr><td><b>Accounts &amp; auth</b></td><td>Signup, KYC verification, login with 2FA, device/session management, bank-account linking, market-segment activation (equity, F&amp;O).</td></tr>
+        <tr><td><b>Funds</b></td><td>Deposit &amp; withdraw, view available/blocked balance, margin utilisation, ledger &amp; statements.</td></tr>
+        <tr><td><b>Market data</b></td><td>Instrument search, live quotes (LTP, bid/ask, depth), historical candles for charts, watchlists.</td></tr>
+        <tr><td><b>Orders</b></td><td>Place / modify / cancel. Types: <code>MARKET</code>, <code>LIMIT</code>, <code>SL</code>, <code>SL-M</code>. Products: <code>CNC</code> (delivery), <code>MIS</code> (intraday), <code>NRML</code> (F&amp;O carry). Validity: <code>DAY</code>, <code>IOC</code>. Sides: <code>BUY</code>/<code>SELL</code>.</td></tr>
+        <tr><td><b>Order tracking</b></td><td>Order book, trade book, real-time status stream, order history.</td></tr>
+        <tr><td><b>Portfolio</b></td><td>Holdings (delivery), open positions (intraday/F&amp;O), average price, realised &amp; unrealised P&amp;L.</td></tr>
+        <tr><td><b>Post-trade</b></td><td>Contract notes, ledger statements, P&amp;L &amp; capital-gains (tax) reports.</td></tr>
+        <tr><td><b>Notifications</b></td><td>Order fills, price/GTT alerts, margin calls, statement-ready.</td></tr>
+        <tr><td><b>Compliance</b></td><td>Immutable audit trail, EOD reconciliation, surveillance &amp; order-to-trade-ratio hooks.</td></tr>
+      </table></div>
+
+      <h3>Non-functional requirements</h3>
+      <div class="tw"><table>
+        <tr><th>Attribute</th><th>Target</th><th>Notes</th></tr>
+        <tr><td><b>Latency</b></td><td>Broker-side order path p99 &lt; 50&nbsp;ms; quote fan-out &lt; 100&nbsp;ms</td><td>Excludes exchange round-trip. RMS + persistence must stay off slow paths.</td></tr>
+        <tr><td><b>Availability</b></td><td>99.95% in market hours; <b>zero</b> planned downtime while open</td><td>HA everywhere; deploy/migrate only outside trading window.</td></tr>
+        <tr><td><b>Consistency</b></td><td>Orders &amp; money: <span class="pill cp">CP</span> · Quotes &amp; portfolio views: <span class="pill ap">AP</span></td><td>The single most important NFR decision — see §9.</td></tr>
+        <tr><td><b>Durability</b></td><td>No acknowledged order ever lost</td><td>Write-ahead persistence + synchronous replication on the order/ledger stores.</td></tr>
+        <tr><td><b>Scalability</b></td><td>Absorb 10–20× spike at market open</td><td>Elastic stateless services; backpressure on the order path.</td></tr>
+        <tr><td><b>Security</b></td><td>PII encrypted; least-privilege; full auditability</td><td>Regulatory retention (typically 7 years).</td></tr>
+        <tr><td><b>Idempotency</b></td><td>Order placement is exactly-once from the user's view</td><td>Client-supplied idempotency key + server dedupe + reconciliation.</td></tr>
+      </table></div>
+    </section>
+
+    <!-- 03 -->
+    <section id="capacity">
+      <h2><span class="sn">03</span>Capacity Estimation</h2>
+      <p>Rough numbers to size the system and justify the split between the order plane and the data plane. Treat these as order-of-magnitude, not precise.</p>
+      <div class="tw"><table>
+        <tr><th>Dimension</th><th>Assumption</th><th>Derived</th></tr>
+        <tr><td>Registered users</td><td>10M</td><td>—</td></tr>
+        <tr><td>Daily active</td><td>1M DAU · ~200K concurrent at peak</td><td>200K live WebSocket connections</td></tr>
+        <tr><td>Orders</td><td>~20 orders/active user/day → 20M/day</td><td>Avg ~900/s over the ~6.25h window; <b>peak ~15–20K/s</b> at 09:15 open</td></tr>
+        <tr><td>Trades (fills)</td><td>~1.5 fills/order</td><td>~30M executions/day</td></tr>
+        <tr><td>Market ticks</td><td>~5K instruments × up to ~20 updates/s</td><td><b>~100K ticks/s</b> aggregate ingest</td></tr>
+        <tr><td>WS egress</td><td>200K conns × ~10 msgs/s × ~200B (conflated)</td><td>~400&nbsp;MB/s fan-out → many WS nodes</td></tr>
+        <tr><td>Order/trade storage</td><td>~1&nbsp;KB/row × 50M rows/day</td><td>~50&nbsp;GB/day → shard + archive; hot data in Postgres</td></tr>
+        <tr><td>Tick storage (raw)</td><td>100K/s × ~50B</td><td>~5&nbsp;MB/s ≈ 430&nbsp;GB/day raw → TSDB, downsample + TTL</td></tr>
+      </table></div>
+      <div class="callout info"><p class="ct">Takeaway</p><p>The <b>order plane</b> is modest in QPS but demands correctness &amp; low latency; the <b>data plane</b> is enormous in throughput/fan-out but tolerates loss. Designing them as one system is the classic mistake — they scale on different axes and get different guarantees.</p></div>
+    </section>
+
+    <!-- 04 -->
+    <section id="architecture">
+      <h2><span class="sn">04</span>High-Level Architecture</h2>
+      <p>Two planes, deliberately separated at the edge so the read-heavy quote firehose never contends with the correctness-critical order path.</p>
+<figure class="fig">
+<pre class="mermaid">
+flowchart TB
+  A["Web &amp; Mobile Apps"]
+  subgraph EDGE["Edge"]
+    GW["API Gateway"]
+    WS["WebSocket Gateway"]
+  end
+  subgraph OP["Order / Control Plane &#8212; CP"]
+    OMS["OMS"]
+    RMS["RMS"]
+    FUNDS["Funds &amp; Ledger"]
+    EGW["Exchange Gateway"]
+  end
+  MKT["Market Data &#8212; AP"]
+  KAFKA[["Kafka Event Bus"]]
+  subgraph CONS["Consumers"]
+    PF["Portfolio"]
+    NOT["Notifications"]
+    REP["Reporting"]
+  end
+  subgraph DATA["Data Stores"]
+    PG[("Postgres")]
+    RD[("Redis")]
+    TS[("Time-series DB")]
+    OBJ[("Object Store")]
+  end
+  EX{{"Exchange &#183; Matching Engine"}}
+  A -->|REST| GW
+  A <-->|stream| WS
+  GW --> OMS
+  OMS --> RMS
+  OMS --> FUNDS
+  OMS --> EGW
+  EGW <-->|FIX| EX
+  EX -->|feed| MKT
+  OMS -->|order.executed| KAFKA
+  FUNDS -->|trade.settled| KAFKA
+  MKT -->|ticks| KAFKA
+  KAFKA --> PF
+  KAFKA --> NOT
+  KAFKA --> REP
+  KAFKA -->|push| WS
+  OMS --> PG
+  FUNDS --> PG
+  PF --> RD
+  MKT --> RD
+  MKT --> TS
+  REP --> OBJ
+  classDef bus fill:var(--bus-bg),stroke:var(--bus),color:var(--bus);
+  classDef ext fill:var(--ext-bg),stroke:var(--ext),color:var(--ext);
+  classDef store fill:var(--store-bg),stroke:var(--store),color:var(--ink);
+  classDef svc fill:var(--svc-bg),stroke:var(--svc),color:var(--ink);
+  class KAFKA bus;
+  class EX ext;
+  class PG,RD,TS,OBJ store;
+  class OMS,RMS,FUNDS,EGW,MKT,GW,WS,PF,NOT,REP,A svc;
+</pre>
+<p class="figcap">Figure 1 &#8212; Two-plane architecture, colour-coded by role: services, the event bus, the external exchange and data stores. Solid edges are the order/control plane; the feed &amp; push edges form the market-data plane.</p>
+</figure>
+      <h3>Order / control plane <span class="pill cp">CP</span></h3>
+      <p>Client → <b>API Gateway</b> → <b>OMS</b> (order state machine) → <b>RMS</b> (risk gate) + <b>Funds/Ledger</b> (block money) → <b>Exchange Gateway</b> (FIX) → <b>Exchange</b>. Execution reports flow back through the Exchange Gateway to the OMS, which emits events to Kafka. Consumers (Portfolio, Notifications, Reporting, Ledger-settlement) react asynchronously.</p>
+      <h3>Market-data plane <span class="pill ap">AP</span></h3>
+      <p>Exchange feed (UDP multicast) → <b>Market Data Service</b> (decode, normalise, build depth &amp; candles) → Redis (last-value cache) + Kafka (stream) + TSDB (history) → <b>WebSocket Gateway</b> → clients. Read-only, massive fan-out, conflated for slow consumers.</p>
+      <h3>Event backbone</h3>
+      <p><b>Kafka</b> is the spine. Producers (OMS, Funds, Market Data) publish; independent consumer groups (Portfolio, Notifications, Reporting) read. Partitioned by <code>user_id</code> (order/funds events, preserving per-user ordering) or <code>token</code> (ticks). Durable and replayable — the basis for reconciliation and rebuilding downstream stores.</p>
+      <div class="callout note"><p class="ct">Companion</p><p>An interactive node-graph of this architecture — hover to trace connections, click flows to light up end-to-end paths — is available as the <b>HLD Canvas</b> artifact. This guide is the written counterpart.</p></div>
+    </section>
+
+    <!-- 05 -->
+    <section id="components">
+      <h2><span class="sn">05</span>Component Deep-Dives</h2>
+
+      <h3>Order Management Service (OMS)</h3>
+      <p>The heart of the platform. It owns every order's deterministic state machine and is the orchestrator of the placement saga.</p>
+      <ul>
+        <li><b>State machine:</b> <code>PENDING → VALIDATED → SENT → OPEN → PARTIALLY_FILLED → FILLED</code>, with terminal branches <code>REJECTED</code>, <code>CANCELLED</code>, <code>EXPIRED</code>, and transient <code>PENDING_CANCEL</code>/<code>PENDING_MODIFY</code>.</li>
+        <li><b>Write-ahead:</b> every transition is persisted <em>before</em> the side-effect (RMS call, FIX send), so a crash recovers deterministically — no order lost or double-sent.</li>
+        <li><b>Idempotency:</b> a unique constraint on <code>(user_id, client_order_id)</code> makes retries safe at the database level.</li>
+        <li><b>ID mapping:</b> maintains internal ↔ exchange order-ID mapping to correlate execution reports, modifies and cancels.</li>
+      </ul>
+
+      <h3>Risk Management Service (RMS)</h3>
+      <p>A synchronous, blocking gate on the order path plus continuous post-trade monitoring.</p>
+      <ul>
+        <li><b>Pre-trade:</b> margin sufficiency, exposure &amp; position limits, banned/illiquid scrips, price bands / circuit limits.</li>
+        <li><b>Margin model:</b> full cash for <code>CNC</code> delivery; leverage for <code>MIS</code>; <code>SPAN + Exposure</code> for derivatives.</li>
+        <li><b>Hot path:</b> keeps positions/limits in memory (refreshed from Kafka position events); it sits on the latency-critical path, so it must not do slow I/O.</li>
+        <li><b>Post-trade:</b> monitors live margin, auto-square-off on breach.</li>
+      </ul>
+
+      <h3>Funds &amp; Ledger</h3>
+      <p>The authoritative money service, built on a <b>double-entry ledger</b>: every movement is a balanced set of debits and credits, append-only and auditable. Funds are <b>blocked</b> on placement, <b>settled</b> against the actual fill, and the remainder <b>released</b> on cancel/partial. Row-level locking (or optimistic concurrency) prevents the same balance being spent twice.</p>
+
+      <h3>Exchange Gateway</h3>
+      <p>Translates internal orders to the exchange protocol and holds the live session. Speaks <b>FIX</b> over a stateful, <b>sequenced</b> session — sequence numbers, heartbeats (35=0), and gap-fill/resend (35=2) on disconnect. Runs active–passive with sequence-number continuity for failover, guaranteeing strict ordering and no message loss. Handles async <code>ExecutionReport</code> (35=8) messages: fills, partials, rejects, cancels.</p>
+
+      <h3>Market Data Service</h3>
+      <p>Ingests the raw exchange feed (often UDP multicast), decodes the binary format, normalises symbols, builds top-of-book/depth and OHLC candles. Publishes latest tick to Redis (last-value cache), the stream to Kafka, and history to the TSDB. Conflates aggressively for consumers that can't keep up.</p>
+    </section>
+
+    <!-- 06 -->
+    <section id="lifecycle">
+      <h2><span class="sn">06</span>Order Lifecycle</h2>
+      <p>A single buy order, from tap to settlement, with the state and event at each hop.</p>
+      <div class="tw"><table>
+        <tr><th>#</th><th>Step</th><th>Owner</th><th>State / Event</th></tr>
+        <tr><td>1</td><td>Client submits order (with idempotency key)</td><td>Apps → Gateway</td><td>request accepted</td></tr>
+        <tr><td>2</td><td>Validate fields, persist, dedupe</td><td>OMS</td><td><code>PENDING → VALIDATED</code></td></tr>
+        <tr><td>3</td><td>Risk check + block funds (fail ⇒ reject)</td><td>RMS + Funds</td><td>emits <code>funds.blocked</code></td></tr>
+        <tr><td>4</td><td>Route to exchange over FIX</td><td>Exchange GW</td><td><code>SENT → OPEN</code></td></tr>
+        <tr><td>5</td><td>Match against the order book</td><td>Exchange</td><td>execution report</td></tr>
+        <tr><td>6</td><td>Fills return; update state</td><td>Exchange GW → OMS</td><td><code>PARTIALLY_FILLED / FILLED</code>; emits <code>order.executed</code></td></tr>
+        <tr><td>7</td><td>Fan out on the bus</td><td>Kafka</td><td>one event, many consumers</td></tr>
+        <tr><td>8</td><td>Settle funds, update holdings/positions &amp; P&amp;L</td><td>Funds + Portfolio</td><td>emits <code>trade.settled</code></td></tr>
+        <tr><td>9</td><td>Notify + stream status to the user</td><td>Notifications + WS GW</td><td>push + live update</td></tr>
+        <tr><td>10</td><td>EOD reconciliation vs exchange file</td><td>Reporting</td><td>contract note generated</td></tr>
+      </table></div>
+      <div class="callout warn"><p class="ct">Why placement is asynchronous</p><p>The API returns <code>202 Accepted</code> with status <code>PENDING</code> immediately — it does <em>not</em> block until the exchange fills. The final outcome arrives via the WebSocket order stream (or polling). This keeps the API fast and decouples the client from exchange latency.</p></div>
+    </section>
+
+    <!-- 07 -->
+    <section id="schema">
+      <h2><span class="sn">07</span>Data Model &amp; Schema Design</h2>
+      <p>Orders, the ledger, trades and holdings live in a strongly-consistent relational store (Postgres). Market data lives in a TSDB; hot reads in Redis; events in Kafka. Below, the relational core is shown as an entity model — tables with their associations and aggregation; the cache, time-series and event schemas follow.</p>
+
+      <h3>Entities &amp; relationships</h3>
+      <p>The relational core as an entity model &#8212; each table with its key fields, and the <b>associations</b> and <b>aggregation / composition</b> that connect them. Key: <span style="white-space:nowrap">&#128273; primary key</span>, &#128279; foreign key.</p>
+      <figure class="fig">
+<pre class="mermaid">
+classDiagram
+  direction LR
+  class User {
+    +id bigint &#128273;
+    +email, phone, status
+  }
+  class Instrument {
+    +id bigint &#128273;
+    +exchange, token, symbol
+    +segment, lot_size, tick_size
+  }
+  class Order {
+    +id UUID &#128273;
+    +user_id bigint &#128279;
+    +token bigint &#128279;
+    +client_order_id
+    +side, order_type, product, validity
+    +quantity, filled_qty, price
+    +status, exchange_order_id, version
+  }
+  class OrderStateHistory {
+    +id bigserial &#128273;
+    +order_id UUID &#128279;
+    +from_status, to_status
+    +event_type, payload
+  }
+  class Trade {
+    +id UUID &#128273;
+    +order_id UUID &#128279;
+    +user_id bigint &#128279;
+    +token bigint &#128279;
+    +quantity, price
+    +exchange_trade_id
+  }
+  class LedgerEntry {
+    +id bigserial &#128273;
+    +txn_id UUID
+    +user_id bigint &#128279;
+    +account, direction, amount
+    +ref_type, ref_id
+  }
+  class WalletBalance {
+    +user_id bigint &#128273;&#128279;
+    +available, blocked, version
+  }
+  class Holding {
+    +user_id bigint &#128273;&#128279;
+    +token bigint &#128273;&#128279;
+    +quantity, avg_price
+  }
+  class Position {
+    +user_id bigint &#128273;&#128279;
+    +token bigint &#128273;&#128279;
+    +product &#128273;
+    +net_quantity, avg_price
+  }
+  User "1" o-- "0..*" Order : places
+  User "1" *-- "1" WalletBalance : owns
+  User "1" *-- "0..*" LedgerEntry : owns
+  User "1" o-- "0..*" Holding : holds
+  User "1" o-- "0..*" Position : holds
+  Order "1" *-- "0..*" Trade : fills into
+  Order "1" *-- "0..*" OrderStateHistory : transitions
+  Order "0..*" --> "1" Instrument : references
+  Trade "0..*" --> "1" Instrument : references
+  Holding "0..*" --> "1" Instrument : references
+  Position "0..*" --> "1" Instrument : references
+</pre>
+      <div class="notation">
+        <span><span class="g">&#9670;&#8212;</span> composition (part-of, lifecycle-bound)</span>
+        <span><span class="g">&#9671;&#8212;</span> aggregation (has-a)</span>
+        <span><span class="g">&#8212;&#9656;</span> association (references)</span>
+        <span><span class="g">1 &#183; 0..*</span> cardinality</span>
+      </div>
+      <p class="figcap">Figure 2 &#8212; Data model. Filled diamond = composition (an Order owns its Trades &amp; state history; a User owns its wallet &amp; ledger); open diamond = aggregation (a User's holdings &amp; positions); arrow = reference into the instrument master.</p>
+      </figure>
+
+      <h3>Market data — TSDB &amp; Redis</h3>
+      <div class="two">
+      <div class="code"><div class="ch"><span class="dot" style="background:var(--amber)"></span><span class="lang">TSDB · candles</span></div><pre><span class="c">// hypertable / measurement</span>
+candles(
+  token     <span class="t">bigint</span>,
+  interval  <span class="t">text</span>,     <span class="c">// 1m,5m,1d</span>
+  ts        <span class="t">timestamptz</span>,
+  open, high, low, close <span class="t">numeric</span>,
+  volume    <span class="t">bigint</span>
+)  <span class="c">// partitioned by ts</span>
+<span class="c">// raw ticks retained short, then</span>
+<span class="c">// downsampled + TTL'd</span></pre></div>
+      <div class="code"><div class="ch"><span class="dot" style="background:var(--red)"></span><span class="lang">Redis · key patterns</span></div><pre>quote:{token}       <span class="c"># HASH ltp,bid,ask,vol,ts</span>
+depth:{token}       <span class="c"># top-5 bid/ask levels</span>
+session:{sid}       <span class="c"># auth session</span>
+rl:{userId}:{ep}    <span class="c"># token-bucket counter</span>
+pos:{userId}        <span class="c"># cached positions/P&L</span>
+watchlist:{userId}  <span class="c"># SET of tokens</span></pre></div>
+      </div>
+
+      <h3>Kafka topics &amp; event schema</h3>
+      <div class="tw"><table>
+        <tr><th>Topic</th><th>Partition key</th><th>Key events</th></tr>
+        <tr><td><code>orders.events</code></td><td><code>user_id</code></td><td>order.placed, order.executed, order.cancelled, order.rejected</td></tr>
+        <tr><td><code>funds.events</code></td><td><code>user_id</code></td><td>funds.blocked, trade.settled, funds.released</td></tr>
+        <tr><td><code>marketdata.ticks</code></td><td><code>token</code></td><td>tick (LTP/bid/ask/depth)</td></tr>
+        <tr><td><code>notifications</code></td><td><code>user_id</code></td><td>fanned from the above</td></tr>
+      </table></div>
+      <div class="code"><div class="ch"><span class="dot" style="background:var(--violet)"></span><span class="lang">JSON · order.executed event</span></div><pre>{
+  <span class="p">"eventId"</span>: <span class="s">"9d1c…"</span>,           <span class="c">// dedupe key for consumers</span>
+  <span class="p">"eventType"</span>: <span class="s">"order.executed"</span>,
+  <span class="p">"occurredAt"</span>: <span class="s">"2026-09-19T09:15:04.221Z"</span>,
+  <span class="p">"userId"</span>: <span class="m">84213</span>,
+  <span class="p">"orderId"</span>: <span class="s">"c0ffee…"</span>,
+  <span class="p">"token"</span>: <span class="m">738561</span>,
+  <span class="p">"filledQty"</span>: <span class="m">10</span>,
+  <span class="p">"avgPrice"</span>: <span class="m">2948.30</span>,
+  <span class="p">"status"</span>: <span class="s">"FILLED"</span>
+}</pre></div>
+    </section>
+
+    <!-- 08 -->
+    <section id="api">
+      <h2><span class="sn">08</span>API Design</h2>
+      <p>REST for commands &amp; queries, WebSocket for streaming. Bearer-JWT auth, versioned under <code>/api/v1</code>, cursor pagination, a uniform error envelope, and idempotency on writes.</p>
+
+      <h3>Conventions</h3>
+      <div class="tw"><table>
+        <tr><th>Concern</th><th>Convention</th></tr>
+        <tr><td>Auth</td><td><code>Authorization: Bearer &lt;jwt&gt;</code>; short-lived access token + refresh token.</td></tr>
+        <tr><td>Idempotency</td><td><code>Idempotency-Key</code> header (or <code>clientOrderId</code>) on all POST writes; server stores key→response ~24h.</td></tr>
+        <tr><td>Errors</td><td><code>{ "error": { "code", "message", "requestId" } }</code> with a stable machine-readable <code>code</code>.</td></tr>
+        <tr><td>Rate limits</td><td>Per-user token bucket; <code>429</code> + <code>Retry-After</code> when exceeded.</td></tr>
+        <tr><td>Pagination</td><td>Cursor-based: <code>?limit=&amp;cursor=</code> → <code>{ items, nextCursor }</code>.</td></tr>
+      </table></div>
+
+      <h3>Endpoints</h3>
+      <div class="tw"><table>
+        <tr><th>Method</th><th>Path</th><th>Purpose</th></tr>
+        <tr><td><span class="pill post">POST</span></td><td><code>/auth/login</code></td><td>Password login → temp token + <code>mfaRequired</code></td></tr>
+        <tr><td><span class="pill post">POST</span></td><td><code>/auth/verify-2fa</code></td><td>OTP → access + refresh tokens</td></tr>
+        <tr><td><span class="pill get">GET</span></td><td><code>/funds/balance</code></td><td>Available / blocked / margin</td></tr>
+        <tr><td><span class="pill post">POST</span></td><td><code>/funds/deposit</code></td><td>Initiate deposit (returns gateway redirect)</td></tr>
+        <tr><td><span class="pill get">GET</span></td><td><code>/instruments?q=&amp;exchange=</code></td><td>Symbol search</td></tr>
+        <tr><td><span class="pill get">GET</span></td><td><code>/quotes?tokens=</code></td><td>Quote snapshot (batch)</td></tr>
+        <tr><td><span class="pill get">GET</span></td><td><code>/instruments/{token}/candles</code></td><td>Historical OHLC for charts</td></tr>
+        <tr><td><span class="pill post">POST</span></td><td><code>/orders</code></td><td>Place order → <code>202</code> PENDING</td></tr>
+        <tr><td><span class="pill put">PUT</span></td><td><code>/orders/{id}</code></td><td>Modify (qty/price/trigger)</td></tr>
+        <tr><td><span class="pill del">DEL</span></td><td><code>/orders/{id}</code></td><td>Cancel</td></tr>
+        <tr><td><span class="pill get">GET</span></td><td><code>/orders?status=&amp;date=</code></td><td>Order book</td></tr>
+        <tr><td><span class="pill get">GET</span></td><td><code>/trades?date=</code></td><td>Trade book</td></tr>
+        <tr><td><span class="pill get">GET</span></td><td><code>/portfolio/holdings</code></td><td>Delivery holdings + P&amp;L</td></tr>
+        <tr><td><span class="pill get">GET</span></td><td><code>/portfolio/positions</code></td><td>Open intraday / F&amp;O positions</td></tr>
+      </table></div>
+
+      <h3>Place order — request &amp; response</h3>
+      <div class="two">
+      <div class="code"><div class="ch"><span class="dot" style="background:var(--blue)"></span><span class="lang">POST /api/v1/orders</span></div><pre><span class="c">// headers</span>
+Authorization: Bearer &lt;jwt&gt;
+Idempotency-Key: 6f2a-…
+
+<span class="c">// body</span>
+{
+  <span class="p">"exchange"</span>: <span class="s">"NSE"</span>,
+  <span class="p">"token"</span>: <span class="m">738561</span>,
+  <span class="p">"side"</span>: <span class="s">"BUY"</span>,
+  <span class="p">"orderType"</span>: <span class="s">"LIMIT"</span>,
+  <span class="p">"product"</span>: <span class="s">"CNC"</span>,
+  <span class="p">"validity"</span>: <span class="s">"DAY"</span>,
+  <span class="p">"quantity"</span>: <span class="m">10</span>,
+  <span class="p">"price"</span>: <span class="m">2950.00</span>,
+  <span class="p">"clientOrderId"</span>: <span class="s">"app-6f2a"</span>
+}</pre></div>
+      <div class="code"><div class="ch"><span class="dot" style="background:var(--green)"></span><span class="lang">202 Accepted</span></div><pre>{
+  <span class="p">"orderId"</span>: <span class="s">"c0ffee-…"</span>,
+  <span class="p">"status"</span>: <span class="s">"PENDING"</span>,
+  <span class="p">"placedAt"</span>: <span class="s">"2026-09-19T09:15:04Z"</span>
+}
+
+<span class="c">// terminal state arrives via WS,</span>
+<span class="c">// not in this response.</span>
+<span class="c">// RMS reject → 422:</span>
+{ <span class="p">"error"</span>: {
+  <span class="p">"code"</span>: <span class="s">"INSUFFICIENT_FUNDS"</span>,
+  <span class="p">"message"</span>: <span class="s">"Margin shortfall"</span>,
+  <span class="p">"requestId"</span>: <span class="s">"req-91…"</span> } }</pre></div>
+      </div>
+
+      <h4>Status codes</h4>
+      <div class="tw"><table>
+        <tr><th>Code</th><th>Meaning on the order path</th></tr>
+        <tr><td><code>202</code></td><td>Order accepted, now <code>PENDING</code> (async outcome)</td></tr>
+        <tr><td><code>400</code></td><td>Malformed request (bad enum, missing field)</td></tr>
+        <tr><td><code>409</code></td><td>Idempotency conflict / duplicate <code>clientOrderId</code></td></tr>
+        <tr><td><code>422</code></td><td>RMS rejection (funds, limits, banned scrip)</td></tr>
+        <tr><td><code>429</code></td><td>Rate limited (common at market open)</td></tr>
+      </table></div>
+
+      <h3>WebSocket streaming protocol</h3>
+      <p>One socket per client carries both market data and order updates. The client subscribes to tokens; the server pushes conflated ticks and any order-status changes for that user.</p>
+      <div class="two">
+      <div class="code"><div class="ch"><span class="dot" style="background:var(--violet)"></span><span class="lang">client → server</span></div><pre>{ <span class="p">"action"</span>: <span class="s">"subscribe"</span>,
+  <span class="p">"mode"</span>: <span class="s">"full"</span>,
+  <span class="p">"tokens"</span>: [<span class="m">738561</span>, <span class="m">408065</span>] }
+
+{ <span class="p">"action"</span>: <span class="s">"unsubscribe"</span>,
+  <span class="p">"tokens"</span>: [<span class="m">408065</span>] }</pre></div>
+      <div class="code"><div class="ch"><span class="dot" style="background:var(--green)"></span><span class="lang">server → client</span></div><pre><span class="c">// tick</span>
+{ <span class="p">"type"</span>: <span class="s">"tick"</span>, <span class="p">"token"</span>: <span class="m">738561</span>,
+  <span class="p">"ltp"</span>: <span class="m">2948.30</span>, <span class="p">"bid"</span>: <span class="m">2948.1</span>,
+  <span class="p">"ask"</span>: <span class="m">2948.5</span>, <span class="p">"ts"</span>: <span class="m">1758…</span> }
+
+<span class="c">// order update</span>
+{ <span class="p">"type"</span>: <span class="s">"order_update"</span>,
+  <span class="p">"orderId"</span>: <span class="s">"c0ffee-…"</span>,
+  <span class="p">"status"</span>: <span class="s">"FILLED"</span>,
+  <span class="p">"filledQty"</span>: <span class="m">10</span>, <span class="p">"avgPrice"</span>: <span class="m">2948.3</span> }</pre></div>
+      </div>
+    </section>
+
+    <!-- 09 -->
+    <section id="reliability">
+      <h2><span class="sn">09</span>Consistency &amp; Reliability</h2>
+      <h3>Where each guarantee applies</h3>
+      <p>Orders and money are <span class="pill cp">CP</span>: correctness beats availability — a stale balance or a lost order is a real financial error. Quotes, watchlists and portfolio <em>views</em> are <span class="pill ap">AP</span>: a tick that's a few ms stale is fine, and availability wins.</p>
+
+      <h3>Order placement as a saga</h3>
+      <p>The OMS orchestrates a short saga: <b>persist (PENDING) → RMS check + funds block → route to exchange</b>. Each step has a compensating action (release funds, mark rejected) so a failure at any point leaves the system consistent. Because persistence is write-ahead, a crashed OMS recovers by replaying the last known state and reconciling with the exchange.</p>
+
+      <h3>Idempotency &amp; exactly-once-ish</h3>
+      <ul>
+        <li><b>Placement:</b> unique <code>(user_id, client_order_id)</code> ⇒ retries can't duplicate.</li>
+        <li><b>Execution reports:</b> unique <code>exchange_trade_id</code> ⇒ a re-delivered fill is ignored.</li>
+        <li><b>Consumers:</b> dedupe on <code>eventId</code> ⇒ a replayed Kafka event doesn't double-count P&amp;L or double-notify.</li>
+      </ul>
+
+      <h3>Failure scenarios</h3>
+      <div class="tw"><table>
+        <tr><th>Failure</th><th>Handling</th></tr>
+        <tr><td>OMS crashes mid-placement</td><td>Recover from persisted state; reconcile open orders with the exchange on restart.</td></tr>
+        <tr><td>Exchange gateway disconnects</td><td>FIX resend/gap-fill on reconnect; active-passive failover with seq continuity.</td></tr>
+        <tr><td>Duplicate execution report</td><td>Rejected by unique <code>exchange_trade_id</code>.</td></tr>
+        <tr><td>Kafka consumer lag/replay</td><td>Idempotent consumers; replay rebuilds downstream stores safely.</td></tr>
+        <tr><td>Intraday margin breach</td><td>RMS post-trade monitor triggers auto-square-off.</td></tr>
+        <tr><td>Broker/exchange mismatch</td><td>EOD reconciliation against the exchange trade file flags discrepancies.</td></tr>
+      </table></div>
+    </section>
+
+    <!-- 10 -->
+    <section id="scaling">
+      <h2><span class="sn">10</span>Scaling &amp; Performance</h2>
+      <ul>
+        <li><b>Shard orders &amp; ledger by <code>user_id</code></b>; read replicas absorb order-book/portfolio reads. A single user's data stays co-located, so per-user transactions stay single-shard.</li>
+        <li><b>Stateless services autoscale</b>; all shared state (rate limits, sessions, quotes) lives in Redis so any instance serves any user.</li>
+        <li><b>Kafka partitioning</b> by user/token gives parallelism while preserving ordering within a key.</li>
+        <li><b>WS fan-out</b> scales horizontally with a shared subscription store; <b>conflation</b> bounds memory and egress for slow consumers during volatile opens.</li>
+        <li><b>Market-open spike</b> (10–20×): pre-scale ahead of 09:15, apply backpressure/queueing on the order path, and rate-limit per user so no client can monopolise capacity.</li>
+        <li><b>Hot-path tricks:</b> local JWT verification at the gateway (no round trip), in-memory RMS positions, last-value quote cache in Redis.</li>
+      </ul>
+      <div class="callout info"><p class="ct">Rule of thumb</p><p>Scale the <b>data plane</b> for throughput and fan-out (more WS + market-data nodes, aggressive conflation). Scale the <b>order plane</b> for correctness under burst (sharding, backpressure, idempotency) — not raw QPS, which is modest.</p></div>
+    </section>
+
+    <!-- 11 -->
+    <section id="security">
+      <h2><span class="sn">11</span>Security &amp; Compliance</h2>
+      <ul>
+        <li><b>AuthN/Z:</b> short-lived JWTs, refresh rotation, 2FA, device binding; mTLS between internal services; secrets in a vault.</li>
+        <li><b>Data protection:</b> PII and bank details encrypted at rest (field-level for the most sensitive), TLS in transit, tokenised card/bank references — never raw numbers in logs or URLs.</li>
+        <li><b>Regulatory:</b> immutable audit log of every order/fund action; typically 7-year retention in cold storage; surveillance hooks for order-to-trade ratio, self-trades, and circuit-limit breaches.</li>
+        <li><b>Abuse &amp; resilience:</b> per-user rate limits, DDoS protection at the edge, and circuit breakers around the exchange link so its failure degrades gracefully rather than cascading.</li>
+      </ul>
+    </section>
+
+    <!-- 12 -->
+    <section id="observability">
+      <h2><span class="sn">12</span>Observability</h2>
+      <ul>
+        <li><b>Golden metrics:</b> order-placement latency (p50/p99), reject rate, fill rate, exchange round-trip, WS connection count &amp; egress, consumer lag.</li>
+        <li><b>Tracing:</b> a correlation/trace ID injected at the gateway follows an order across OMS → RMS → Funds → Exchange GW and into Kafka consumers.</li>
+        <li><b>Reconciliation dashboards:</b> broker-vs-exchange trade counts, ledger debit=credit invariants, and blocked-vs-settled funds — alert on any drift.</li>
+        <li><b>Alerting:</b> page on exchange-session down, reconciliation mismatch, RMS auto-square-off spikes, and market-open error-rate anomalies.</li>
+      </ul>
+    </section>
+
+    <!-- 13 -->
+    <section id="tradeoffs">
+      <h2><span class="sn">13</span>Trade-offs &amp; Talking Points</h2>
+      <div class="tw"><table>
+        <tr><th>Decision</th><th>Choice &amp; why</th></tr>
+        <tr><td>Monolith vs microservices</td><td>Microservices, so the market-data plane and order plane scale independently and get different guarantees. Cost: operational complexity, distributed reasoning.</td></tr>
+        <tr><td>SQL vs NoSQL for orders</td><td><b>SQL</b> — ACID, constraints (idempotency), and transactional funds updates matter more than write throughput here. Scale via sharding, not by dropping consistency.</td></tr>
+        <tr><td>Sync vs async order path</td><td>Sync only for the blocking parts that must be correct before routing (RMS, funds block); everything downstream (portfolio, notifications, reporting) is async via Kafka.</td></tr>
+        <tr><td>Build vs buy matching</td><td><b>Never build a matching engine</b> for a retail broker — route to the exchange. Building one is a different, far harder product.</td></tr>
+        <tr><td>Exactly-once</td><td>Approximated with idempotency keys + reconciliation rather than pursued as a distributed-systems absolute.</td></tr>
+        <tr><td>Internalisation (advanced)</td><td>Large brokers may internalise/net some flow before routing. Powerful but adds a mini matching engine and heavy regulatory surface — out of scope here.</td></tr>
+      </table></div>
+      <div class="callout key"><p class="ct">If you remember five things</p><p>1) Broker routes, exchange matches. 2) Split the CP order plane from the AP data plane at the edge. 3) The OMS state machine + write-ahead persistence is the correctness backbone. 4) Money is a double-entry ledger, not a balance field. 5) Idempotency + EOD reconciliation is how you get "exactly-once" in practice.</p></div>
+    </section>
+  </main>
+</div>
+
+<button class="tocbtn" id="tocbtn">☰ Contents</button>
+<div class="scrim" id="scrim"></div>
+
+<footer>
+  <b>Stock Broker Trading Platform — System Design Guide.</b> A reference HLD: requirements → capacity → architecture → schema → API → reliability. Numbers are order-of-magnitude for sizing discussions, not production figures.
+</footer>
+
+<script>
+// scrollspy
+const links=[...document.querySelectorAll('.toc a')];
+const map=new Map(links.map(a=>[a.getAttribute('href').slice(1),a]));
+const obs=new IntersectionObserver(es=>{
+  es.forEach(e=>{if(e.isIntersecting){links.forEach(l=>l.classList.remove('active'));const a=map.get(e.target.id);if(a)a.classList.add('active');}});
+},{rootMargin:'-10% 0px -78% 0px',threshold:0});
+document.querySelectorAll('main section').forEach(s=>obs.observe(s));
+
+// mobile TOC drawer
+const toc=document.getElementById('toc'),btn=document.getElementById('tocbtn'),scrim=document.getElementById('scrim');
+function openToc(){toc.classList.add('open');scrim.classList.add('on');}
+function closeToc(){toc.classList.remove('open');scrim.classList.remove('on');}
+btn.onclick=()=>toc.classList.contains('open')?closeToc():openToc();
+scrim.onclick=closeToc;
+toc.addEventListener('click',e=>{if(e.target.tagName==='A')closeToc();});
+</script>
+<script>
+(function(){
+  var root=document.documentElement, mq=matchMedia('(prefers-color-scheme: dark)');
+  function current(){return root.dataset.theme||(mq.matches?'dark':'light');}
+  function label(){var b=document.getElementById('themeToggle');if(b)b.textContent=current()==='dark'?'\u2600 Light':'\u263e Dark';}
+  document.getElementById('themeToggle').addEventListener('click',function(){
+    var next=current()==='dark'?'light':'dark';root.dataset.theme=next;
+    try{localStorage.setItem('sdg-theme',next)}catch(e){}
+    label();document.dispatchEvent(new Event('themechange'));});
+  mq.addEventListener('change',function(){if(!root.dataset.theme){label();document.dispatchEvent(new Event('themechange'));}});
+  label();
+})();
+</script>
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
+const blocks=[...document.querySelectorAll('pre.mermaid')];
+blocks.forEach(b=>{b.dataset.src=b.textContent;});
+const v=n=>getComputedStyle(document.documentElement).getPropertyValue('--'+n).trim();
+async function render(){
+  mermaid.initialize({startOnLoad:false,securityLevel:'strict',theme:'base',fontFamily:'Inter, sans-serif',
+    themeVariables:{background:v('surface'),mainBkg:v('surface-2'),primaryColor:v('surface-2'),
+      primaryBorderColor:v('primary'),primaryTextColor:v('ink'),secondaryColor:v('surface-2'),
+      tertiaryColor:v('surface'),lineColor:v('ink-dim'),textColor:v('ink'),nodeBorder:v('line'),
+      clusterBkg:v('surface'),clusterBorder:v('line'),edgeLabelBackground:v('fig-bg'),classText:v('ink')}});
+  for(const b of blocks){b.removeAttribute('data-processed');
+    b.textContent=b.dataset.src.replace(/var\(--([a-z0-9-]+)\)/g,(_,n)=>v(n));}
+  try{await mermaid.run({nodes:blocks});}catch(e){console.error(e);}
+}
+await render();
+document.addEventListener('themechange',render);
+window.__rendered=true;
+</script>
+</body>
+</html>
